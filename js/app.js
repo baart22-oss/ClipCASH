@@ -213,15 +213,8 @@ function creditReferralBonuses(newUser, subscriptionAmount) {
         }
       }
 
-      saveUsers(users.map(u => {
-        if (u.id === l1.id) return l1;
-        if (l1.referredBy && u.referralCode === l1.referredBy) {
-          const l2 = users.find(x => x.referralCode === l1.referredBy);
-          return l2 || u;
-        }
-        return u;
-      }));
-      saveUsers(users); // overwrite with mutated copies
+      // Objects in `users` were mutated by reference above; persist the array once.
+      saveUsers(users);
     }
   }
 }
