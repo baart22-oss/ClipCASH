@@ -11,8 +11,11 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+// Set ALLOWED_ORIGIN in .env to your frontend domain (e.g. https://clipcash.co.za).
+// Leaving it unset in production will block all cross-origin requests.
+const allowedOrigin = process.env.ALLOWED_ORIGIN;
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN || '*',
+  origin: allowedOrigin || false,
   methods: ['GET', 'POST', 'OPTIONS'],
 }));
 

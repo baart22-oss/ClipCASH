@@ -54,7 +54,7 @@ function switchTab(tab) {
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
-function handleLogin(e) {
+async function handleLogin(e) {
   e.preventDefault();
   clearErrors();
 
@@ -69,9 +69,11 @@ function handleLogin(e) {
 
   setLoading(btn, true);
 
+  const passwordHash = await hashPassword(password);
+
   setTimeout(() => {
     const users = getUsers();
-    const user  = users.find(u => u.email.toLowerCase() === email && u.password === password);
+    const user  = users.find(u => u.email.toLowerCase() === email && u.passwordHash === passwordHash);
 
     if (!user) {
       showError('login-error', 'Invalid email or password. Please try again.');
@@ -91,7 +93,7 @@ function handleLogin(e) {
 }
 
 // ── Register ─────────────────────────────────────────────────────────────────
-function handleRegister(e) {
+async function handleRegister(e) {
   e.preventDefault();
   clearErrors();
 
@@ -125,6 +127,8 @@ function handleRegister(e) {
 
   setLoading(btn, true);
 
+  const passwordHash = await hashPassword(password);
+
   setTimeout(() => {
     const users = getUsers();
 
@@ -156,7 +160,7 @@ function handleRegister(e) {
       id:           generateId(),
       username,
       email,
-      password,
+      passwordHash,
       isAdmin:      false,
       wallet:       0,
       totalEarned:  0,

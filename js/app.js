@@ -72,6 +72,16 @@ function generateId() {
   return 'cc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
 }
 
+/** SHA-256 hash a password string using the Web Crypto API. Returns hex string. */
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data     = encoder.encode(password);
+  const hashBuf  = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hashBuf))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // ── localStorage Helpers ─────────────────────────────────────────────────────
 function getCurrentUser()     { return JSON.parse(localStorage.getItem(LS.USER)  || 'null'); }
 function saveCurrentUser(u)   { localStorage.setItem(LS.USER, JSON.stringify(u)); }
@@ -239,12 +249,16 @@ function seedDemoData() {
   if (localStorage.getItem(LS.SEEDED)) return;
 
   const now = Date.now();
+  // Passwords stored as SHA-256 hashes (never plain text).
+  // admin123 → SHA-256, demo123 → SHA-256
+  const HASH_ADMIN = '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9';
+  const HASH_DEMO  = 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791';
 
   const adminUser = {
     id:           'user_admin',
     username:     'Admin',
     email:        'admin@clipcash.co.za',
-    password:     'admin123',
+    passwordHash: HASH_ADMIN,
     isAdmin:      true,
     wallet:       0,
     totalEarned:  0,
@@ -261,7 +275,7 @@ function seedDemoData() {
     id:           'user_demo',
     username:     'DemoUser',
     email:        'demo@clipcash.co.za',
-    password:     'demo123',
+    passwordHash: HASH_DEMO,
     isAdmin:      false,
     wallet:       500,
     totalEarned:  2500,
