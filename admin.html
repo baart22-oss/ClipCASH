@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel — Clip Cash 💰</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="container">
+    <a href="index.html" class="navbar-brand"><span class="logo-icon">🎬</span>Clip<span>Cash</span></a>
+    <div class="navbar-nav" id="main-nav"></div>
+    <button class="navbar-toggle" id="nav-toggle"><span></span><span></span><span></span></button>
+  </div>
+</nav>
+<div class="navbar-mobile" id="mobile-nav"></div>
+
+<!-- PAGE HEADER -->
+<div class="page-header">
+  <div class="container">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+      <div>
+        <h1>🔧 Admin Panel</h1>
+        <p>Manage withdrawals, verify transactions, and monitor users.</p>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="demo-data-btn">🧪 Load Demo Data</button>
+    </div>
+  </div>
+</div>
+
+<main class="admin-page" style="padding:1.5rem 0 4rem">
+  <div class="container">
+
+    <!-- Admin Stats -->
+    <div class="admin-stat-grid">
+      <div class="stat-card">
+        <span class="stat-icon">⏳</span>
+        <div class="stat-label">Pending Withdrawals</div>
+        <div class="stat-value accent" id="stat-pending-w">0</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">💳</span>
+        <div class="stat-label">Pending Transactions</div>
+        <div class="stat-value gold" id="stat-pending-t">0</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">👥</span>
+        <div class="stat-label">Total Users</div>
+        <div class="stat-value" id="stat-total-users">0</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">🏆</span>
+        <div class="stat-label">Active Subscribers</div>
+        <div class="stat-value green" id="stat-active-subs">0</div>
+      </div>
+      <div class="stat-card">
+        <span class="stat-icon">💰</span>
+        <div class="stat-label">Total Withdrawal Volume</div>
+        <div class="stat-value gold" id="stat-total-w-vol">R0.00</div>
+      </div>
+    </div>
+
+    <!-- Tab Navigation -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="withdrawals">⏳ Withdrawals</button>
+      <button class="tab-btn" data-tab="transactions">💳 Transactions</button>
+      <button class="tab-btn" data-tab="users">👥 Users</button>
+    </div>
+
+    <!-- TAB: Withdrawals -->
+    <div class="tab-panel active" id="tab-withdrawals">
+      <div class="section-actions">
+        <h2>Pending &amp; All Withdrawals</h2>
+        <button class="btn btn-secondary btn-sm" onclick="renderWithdrawals()">🔄 Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Amount</th>
+                <th>Fee</th>
+                <th>Net</th>
+                <th>Method</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="withdrawals-tbody">
+              <tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Transactions -->
+    <div class="tab-panel" id="tab-transactions">
+      <div class="section-actions">
+        <h2>Deposit Transactions</h2>
+        <button class="btn btn-secondary btn-sm" onclick="renderTransactions()">🔄 Refresh</button>
+      </div>
+      <div class="alert alert-info" style="margin-bottom:1rem">
+        <span class="alert-icon">ℹ️</span>
+        <div>Verify Yoco payments after confirming receipt. This activates the user's subscription.</div>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Plan</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="transactions-tbody">
+              <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: Users -->
+    <div class="tab-panel" id="tab-users">
+      <div class="section-actions">
+        <h2>All Users</h2>
+        <button class="btn btn-secondary btn-sm" onclick="renderUsers()">🔄 Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Wallet</th>
+                <th>Total Earned</th>
+                <th>Referral Earn</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Joined</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div id="toast-container"></div>
+<script src="js/app.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>
