@@ -3,7 +3,7 @@
 /**
  * Deposit Routes
  *
- * POST /api/deposit/initiate
+ * POST /api/deposit/initiate  (requires user JWT)
  *   Creates a pending deposit / subscription transaction in the backend store.
  *   Called by the frontend when a user selects Yoco as payment method.
  *   The transaction stays pending until either:
@@ -18,19 +18,21 @@
 const express = require('express');
 const router  = express.Router();
 
-// Share the same in-memory store as the admin routes
-const { store } = require('./admin');
-
-function generateId() {
-  return 'cc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
-}
+const { requireUserJWT } = require('./auth');
+const { store, generateId } = require('./store');
 
 // ── POST /api/deposit/initiate ──────────────────────────────────────────────
-router.post('/initiate', (req, res) => {
-  const { userId, username, email, tier, tierName, amount, method } = req.body || {};
+router.post('/initiate', requireUserJWT, (req, res) => {
+  // userId comes from the verified JWT, not the request body
+  const userId   = req.userId;
+  const user     = store.users.find(u => u.id === userId);
+  const username = user ? user.username : '';
+  const email    = user ? user.email    : '';
 
-  if (!userId || !tier || !amount) {
-    return res.status(400).json({ error: 'userId, tier, and amount are required' });
+  const { tier, tierName, amount, method } = req.body || {};
+
+  if (!tier || !amount) {
+    return res.status(400).json({ error: 'tier and amount are required' });
   }
 
   const validTiers = ['starter', 'bronze', 'silver', 'gold', 'platinum', 'diamond'];
