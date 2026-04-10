@@ -160,7 +160,7 @@ async function renderWithdrawalHistory() {
         <td data-label="Fee" class="text-red">- ${formatZAR(w.fee)}</td>
         <td data-label="You Receive" class="text-green">${formatZAR(w.net)}</td>
         <td data-label="Method">${methodLabel(w.method)}</td>
-        <td data-label="Status"><span class="badge badge-${w.status}">${statusDot()} ${w.status}</span></td>
+        <td data-label="Status"><span class="badge badge-${w.status}">${statusDot(w.status)} ${w.status}</span></td>
       </tr>
     `).join('');
   } catch (_err) {
@@ -173,7 +173,7 @@ function methodLabel(method) {
   return map[method] || method;
 }
 
-function statusDot() {
+function statusDot(status) {
   return `<span class="badge-dot"></span>`;
 }
 

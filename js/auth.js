@@ -205,7 +205,7 @@ function updatePasswordStrength() {
     { label: 'Strong',     color: '#00d68f', width: '100%' },
   ];
   const lvl = levels[Math.min(score, 4)];
-  bar.style.width      = pw.length < 1 ? '0%'    : lvl.width;
-  bar.style.background = pw.length < 1 ? ''      : lvl.color;
+  bar.style.width      = pw.length < 1 ? '0%'      : lvl.width;
+  bar.style.background = pw.length < 1 ? '#444'    : lvl.color;
   if (label) label.textContent = pw.length < 1 ? '' : lvl.label;
 }

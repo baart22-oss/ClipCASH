@@ -1,9 +1,10 @@
 'use strict';
 
 require('dotenv').config();
-const express = require('express');
-const bcrypt  = require('bcryptjs');
-const cors    = require('cors');
+const express   = require('express');
+const bcrypt    = require('bcryptjs');
+const cors      = require('cors');
+const rateLimit = require('express-rate-limit');
 
 const webhookRoutes    = require('./routes/webhook');
 const adminRoutes      = require('./routes/admin');
@@ -30,6 +31,20 @@ app.use(cors({
 app.use('/api/webhook', express.raw({ type: 'application/json' }));
 // JSON body for all other routes
 app.use(express.json());
+
+// ── Rate Limiting ─────────────────────────────────────────────────────────────
+// Applies strict limits to login/register and admin login endpoints to slow
+// brute-force and credential-stuffing attacks.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max:      20,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: { error: 'Too many requests from this IP, please try again later.' },
+});
+app.use('/api/auth/login',    authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/admin/login',   authLimiter);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/webhook',    webhookRoutes);
