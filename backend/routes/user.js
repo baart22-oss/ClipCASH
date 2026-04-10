@@ -20,16 +20,16 @@ const { store, SUBSCRIPTION_TIERS, generateId } = require('./store');
 router.use(requireUserJWT);
 
 // ── GET /api/user/me ──────────────────────────────────────────────────────────
-router.get('/me', (req, res) => {
-  const user = store.users.find(u => u.id === req.userId);
+router.get('/me', async (req, res) => {
+  const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser });
 });
 
 // ── PATCH /api/user/me — update non-sensitive mutable fields ──────────────────
-router.patch('/me', (req, res) => {
-  const user = store.users.find(u => u.id === req.userId);
+router.patch('/me', async (req, res) => {
+  const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const { watchedTrailers, lastEarningsProcessed } = req.body || {};
@@ -37,22 +37,20 @@ router.patch('/me', (req, res) => {
   if (Array.isArray(watchedTrailers))          user.watchedTrailers       = watchedTrailers;
   if (typeof lastEarningsProcessed === 'number') user.lastEarningsProcessed = lastEarningsProcessed;
 
+  await store.saveUser(user);
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser });
 });
 
 // ── GET /api/user/transactions ────────────────────────────────────────────────
-router.get('/transactions', (req, res) => {
-  const myTx = store.transactions
-    .filter(t => t.userId === req.userId)
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, 50);
+router.get('/transactions', async (req, res) => {
+  const myTx = await store.getUserTransactions(req.userId, 50);
   return res.json({ transactions: myTx });
 });
 
 // ── POST /api/user/subscription — activate or upgrade a plan ─────────────────
-router.post('/subscription', (req, res) => {
-  const user = store.users.find(u => u.id === req.userId);
+router.post('/subscription', async (req, res) => {
+  const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const { tier: tierKey, method } = req.body || {};
@@ -70,6 +68,7 @@ router.post('/subscription', (req, res) => {
       activatedAt: now,
       expiresAt:   now + 3 * 86400000,
     };
+    await store.saveUser(user);
     const { passwordHash: _ph, ...safeUser } = user;
     return res.json({ user: safeUser });
   }
@@ -93,8 +92,10 @@ router.post('/subscription', (req, res) => {
   user.totalEarned           = 0;
   user.lastEarningsProcessed = now;
 
+  await store.saveUser(user);
+
   // Log deposit transaction
-  store.transactions.push({
+  await store.saveTransaction({
     id:        generateId(),
     userId:    user.id,
     username:  user.username,
@@ -110,15 +111,15 @@ router.post('/subscription', (req, res) => {
   });
 
   // Credit referral bonuses up 3 levels
-  creditReferralBonuses(user, tier.price, now);
+  await creditReferralBonuses(user, tier.price, now);
 
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser });
 });
 
 // ── POST /api/user/earnings — credit earnings for watching a trailer ──────────
-router.post('/earnings', (req, res) => {
-  const user = store.users.find(u => u.id === req.userId);
+router.post('/earnings', async (req, res) => {
+  const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const { amount, trailerId, trailerTitle } = req.body || {};
@@ -155,7 +156,9 @@ router.post('/earnings', (req, res) => {
   }
   user.lastEarningsProcessed = now;
 
-  store.transactions.push({
+  await store.saveUser(user);
+
+  await store.saveTransaction({
     id:        generateId(),
     userId:    user.id,
     username:  user.username,
@@ -174,28 +177,29 @@ router.post('/earnings', (req, res) => {
 // ── Internal: credit multi-level referral bonuses ─────────────────────────────
 const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
 
-function creditReferralBonuses(newUser, amount, now) {
+async function creditReferralBonuses(newUser, amount, now) {
   if (!newUser.referredBy) return;
 
-  const l1 = store.users.find(u => u.referralCode === newUser.referredBy);
+  const l1 = await store.findUserByReferralCode(newUser.referredBy);
   if (!l1) return;
-  _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
+  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
 
   if (!l1.referredBy) return;
-  const l2 = store.users.find(u => u.referralCode === l1.referredBy);
+  const l2 = await store.findUserByReferralCode(l1.referredBy);
   if (!l2) return;
-  _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
+  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
 
   if (!l2.referredBy) return;
-  const l3 = store.users.find(u => u.referralCode === l2.referredBy);
+  const l3 = await store.findUserByReferralCode(l2.referredBy);
   if (!l3) return;
-  _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
+  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
 }
 
-function _creditBonus(user, bonus, now, note) {
+async function _creditBonus(user, bonus, now, note) {
   user.wallet          = parseFloat(((user.wallet          || 0) + bonus).toFixed(4));
   user.referralEarnings = parseFloat(((user.referralEarnings || 0) + bonus).toFixed(4));
-  store.transactions.push({
+  await store.saveUser(user);
+  await store.saveTransaction({
     id:        generateId(),
     userId:    user.id,
     username:  user.username,
