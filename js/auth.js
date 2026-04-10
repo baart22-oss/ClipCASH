@@ -6,8 +6,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   // Redirect if already logged in
-  const current = getCurrentUser();
-  if (current) { window.location.href = 'dashboard.html'; return; }
+  const token = getUserToken();
+  if (token && getCurrentUser()) { window.location.href = 'dashboard.html'; return; }
 
   // Pre-select tab from URL param
   const params = new URLSearchParams(window.location.search);
@@ -69,27 +69,25 @@ async function handleLogin(e) {
 
   setLoading(btn, true);
 
-  const passwordHash = await hashPassword(password);
+  try {
+    const data = await apiRequest('/api/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    });
 
-  setTimeout(() => {
-    const users = getUsers();
-    const user  = users.find(u => u.email.toLowerCase() === email && u.passwordHash === passwordHash);
+    setUserToken(data.token);
+    saveCurrentUser(data.user);
 
-    if (!user) {
-      showError('login-error', 'Invalid email or password. Please try again.');
-      setLoading(btn, false);
-      return;
-    }
-
-    // Process any pending ROI earnings
-    const updated = processPendingEarnings(user);
-    saveCurrentUser(updated);
-
-    showToast('Welcome back, ' + user.username + '! 👋', 'success');
+    showToast('Welcome back, ' + data.user.username + '! 👋', 'success');
     setTimeout(() => {
-      window.location.href = user.isAdmin ? 'admin.html' : 'dashboard.html';
+      window.location.href = 'dashboard.html';
     }, 800);
-  }, 600);
+  } catch (err) {
+    showError('login-error', err.status === 401
+      ? 'Invalid email or password. Please try again.'
+      : 'Login failed: ' + err.message);
+    setLoading(btn, false);
+  }
 }
 
 // ── Register ─────────────────────────────────────────────────────────────────
@@ -104,7 +102,7 @@ async function handleRegister(e) {
   const referralInp = document.getElementById('reg-referral')   ?.value.trim().toUpperCase();
   const btn         = document.getElementById('register-btn');
 
-  // Validation
+  // Client-side validation
   let valid = true;
 
   if (!username || username.length < 3) {
@@ -127,63 +125,38 @@ async function handleRegister(e) {
 
   setLoading(btn, true);
 
-  const passwordHash = await hashPassword(password);
-
-  setTimeout(() => {
-    const users = getUsers();
-
-    if (users.find(u => u.email.toLowerCase() === email)) {
-      showError('reg-email-error', 'An account with this email already exists.');
-      setLoading(btn, false);
-      return;
-    }
-    if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
-      showError('reg-username-error', 'Username is already taken.');
-      setLoading(btn, false);
-      return;
-    }
-
-    // Validate referral code
-    let referredBy = null;
-    if (referralInp) {
-      const referrer = users.find(u => u.referralCode === referralInp);
-      if (!referrer) {
-        showError('reg-referral-error', 'Invalid referral code.');
-        setLoading(btn, false);
-        return;
-      }
-      referredBy = referralInp;
-    }
-
-    const now  = Date.now();
-    const newUser = {
-      id:           generateId(),
-      username,
-      email,
-      passwordHash,
-      isAdmin:      false,
-      wallet:       0,
-      totalEarned:  0,
-      referralCode: generateCode(8),
-      referredBy,
-      referralEarnings: 0,
-      subscription: {
-        tier:       'free_intern',
-        activatedAt: now,
-        expiresAt:   now + 3 * 86400000,
+  try {
+    const data = await apiRequest('/api/auth/register', {
+      method: 'POST',
+      body: {
+        username,
+        email,
+        password,
+        referralCode: referralInp || undefined,
       },
-      createdAt:    now,
-      lastEarningsProcessed: now,
-      watchedTrailers: [],
-    };
+    });
 
-    users.push(newUser);
-    saveUsers(users);
-    saveCurrentUser(newUser);
+    setUserToken(data.token);
+    saveCurrentUser(data.user);
 
     showToast('Account created! Welcome to Clip Cash 🎉', 'success');
     setTimeout(() => { window.location.href = 'dashboard.html'; }, 1000);
-  }, 700);
+  } catch (err) {
+    if (err.status === 409) {
+      // Duplicate email or username
+      const msg = err.data && err.data.error ? err.data.error : 'Account already exists.';
+      if (msg.toLowerCase().includes('email')) {
+        showError('reg-email-error', msg);
+      } else {
+        showError('reg-username-error', msg);
+      }
+    } else if (err.status === 400 && err.data && err.data.error && err.data.error.toLowerCase().includes('referral')) {
+      showError('reg-referral-error', err.data.error);
+    } else {
+      showError('reg-email-error', 'Registration failed: ' + err.message);
+    }
+    setLoading(btn, false);
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -218,10 +191,10 @@ function updatePasswordStrength() {
   if (!bar) return;
 
   let score = 0;
-  if (pw.length >= 6)  score++;
-  if (pw.length >= 10) score++;
-  if (/[A-Z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
+  if (pw.length >= 6)          score++;
+  if (pw.length >= 10)         score++;
+  if (/[A-Z]/.test(pw))        score++;
+  if (/[0-9]/.test(pw))        score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;
 
   const levels = [
@@ -232,7 +205,7 @@ function updatePasswordStrength() {
     { label: 'Strong',     color: '#00d68f', width: '100%' },
   ];
   const lvl = levels[Math.min(score, 4)];
-  bar.style.width = pw.length < 1 ? '0%' : lvl.width;
-  bar.style.background = lvl.color;
+  bar.style.width      = pw.length < 1 ? '0%'      : lvl.width;
+  bar.style.background = pw.length < 1 ? '#444'    : lvl.color;
   if (label) label.textContent = pw.length < 1 ? '' : lvl.label;
 }

@@ -15,6 +15,8 @@ const express = require('express');
 const crypto  = require('crypto');
 const router  = express.Router();
 
+const { requireAdminJWT } = require('./admin');
+
 const WEBHOOK_SECRET = process.env.YOCO_WEBHOOK_SECRET || '';
 
 // In-memory store for demo. Replace with a real DB in production.
@@ -84,9 +86,9 @@ router.post('/yoco', (req, res) => {
 
 /**
  * GET /api/webhook/pending
- * Returns pending activations (admin use only in production).
+ * Returns pending activations (admin use only).
  */
-router.get('/pending', (_req, res) => {
+router.get('/pending', requireAdminJWT, (_req, res) => {
   res.json({ pendingActivations });
 });
 

@@ -9,9 +9,16 @@ const WITHDRAWAL_MIN      = 50;
 
 let currentUser = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   currentUser = requireAuth();
   if (!currentUser) return;
+
+  // Refresh user data from backend
+  try {
+    const data = await apiRequest('/api/user/me');
+    currentUser = data.user;
+    saveCurrentUser(currentUser);
+  } catch (_err) { /* use cached user */ }
 
   renderWalletInfo();
   renderWithdrawalHistory();
@@ -22,14 +29,14 @@ document.addEventListener('DOMContentLoaded', () => {
     amountInput.addEventListener('blur',  validateAmount);
   }
 
-  document.getElementById('withdrawal-form')?.addEventListener('submit', handleWithdrawal);
-  document.getElementById('withdraw-max-btn')?.addEventListener('click', setMaxAmount);
+  document.getElementById('withdrawal-form')  ?.addEventListener('submit', handleWithdrawal);
+  document.getElementById('withdraw-max-btn') ?.addEventListener('click', setMaxAmount);
 });
 
 // ── Wallet Info ───────────────────────────────────────────────────────────────
 function renderWalletInfo() {
-  setEl('wallet-balance', formatZAR(currentUser.wallet || 0));
-  setEl('wallet-available', formatZAR(Math.max(0, (currentUser.wallet || 0))));
+  setEl('wallet-balance',   formatZAR(currentUser.wallet || 0));
+  setEl('wallet-available', formatZAR(Math.max(0, currentUser.wallet || 0)));
 
   const minEl = document.getElementById('withdraw-min-display');
   if (minEl) minEl.textContent = formatZAR(WITHDRAWAL_MIN);
@@ -41,11 +48,10 @@ function updateFeeBreakdown() {
   const fee    = rawVal * WITHDRAWAL_FEE_RATE;
   const net    = rawVal - fee;
 
-  setEl('fee-gross',   rawVal > 0 ? formatZAR(rawVal) : '—');
-  setEl('fee-amount',  rawVal > 0 ? formatZAR(fee)    : '—');
-  setEl('fee-net',     rawVal > 0 ? formatZAR(net)    : '—');
+  setEl('fee-gross',  rawVal > 0 ? formatZAR(rawVal) : '—');
+  setEl('fee-amount', rawVal > 0 ? formatZAR(fee)    : '—');
+  setEl('fee-net',    rawVal > 0 ? formatZAR(net)    : '—');
 
-  // Validation color hints
   const amountEl = document.getElementById('withdrawal-amount');
   const errorEl  = document.getElementById('amount-error');
 
@@ -61,9 +67,7 @@ function updateFeeBreakdown() {
   }
 }
 
-function validateAmount() {
-  updateFeeBreakdown();
-}
+function validateAmount() { updateFeeBreakdown(); }
 
 function setMaxAmount() {
   const maxInput = document.getElementById('withdrawal-amount');
@@ -82,7 +86,6 @@ async function handleWithdrawal(e) {
   const account = document.getElementById('withdrawal-account')?.value.trim() || '';
   const btn     = document.getElementById('withdraw-btn');
 
-  // Validate
   if (amount < WITHDRAWAL_MIN) {
     showToast(`Minimum withdrawal is ${formatZAR(WITHDRAWAL_MIN)}.`, 'error');
     return;
@@ -101,25 +104,25 @@ async function handleWithdrawal(e) {
   const fee = parseFloat((amount * WITHDRAWAL_FEE_RATE).toFixed(2));
   const net = parseFloat((amount - fee).toFixed(2));
 
-  // Deduct from local wallet for immediate UI feedback
-  currentUser.wallet = parseFloat(((currentUser.wallet || 0) - amount).toFixed(2));
-  updateUserInStore(currentUser);
-
   try {
-    // Submit withdrawal request to the backend — this is the authoritative record.
+    // Submit withdrawal to backend — wallet is deducted server-side.
+    // userId is derived from the JWT, not sent by the client.
     await apiRequest('/api/withdrawal/submit', {
       method: 'POST',
-      body: {
-        userId:   currentUser.id,
-        username: currentUser.username,
-        email:    currentUser.email,
-        amount,
-        method,
-        account,
-      },
+      body: { amount, method, account },
     });
 
-    // Reset form
+    // Refresh user data to reflect wallet deduction made by backend
+    try {
+      const userData = await apiRequest('/api/user/me');
+      currentUser = userData.user;
+      saveCurrentUser(currentUser);
+    } catch (_e) {
+      // Optimistic local update if backend refresh fails
+      currentUser.wallet = parseFloat(((currentUser.wallet || 0) - amount).toFixed(2));
+      saveCurrentUser(currentUser);
+    }
+
     const form = document.getElementById('withdrawal-form');
     if (form) form.reset();
     updateFeeBreakdown();
@@ -128,10 +131,6 @@ async function handleWithdrawal(e) {
 
     showToast(`Withdrawal of ${formatZAR(amount)} submitted! You'll receive ${formatZAR(net)} after fees.`, 'success', 6000);
   } catch (err) {
-    // Refund the local wallet deduction if the backend call failed
-    currentUser.wallet = parseFloat(((currentUser.wallet || 0) + amount).toFixed(2));
-    updateUserInStore(currentUser);
-    renderWalletInfo();
     showToast('Withdrawal failed: ' + err.message, 'error');
   } finally {
     if (btn) btn.disabled = false;
@@ -145,7 +144,8 @@ async function renderWithdrawalHistory() {
   tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>`;
 
   try {
-    const data = await apiRequest('/api/withdrawal/my?userId=' + encodeURIComponent(currentUser.id));
+    // userId is inferred from the JWT by the backend
+    const data = await apiRequest('/api/withdrawal/my');
     const myW  = data.withdrawals || [];
 
     if (myW.length === 0) {
@@ -164,27 +164,7 @@ async function renderWithdrawalHistory() {
       </tr>
     `).join('');
   } catch (_err) {
-    // Fallback to localStorage history if backend is unreachable
-    const admin = getAdminData();
-    const myW   = admin.withdrawals
-      .filter(w => w.userId === currentUser.id)
-      .sort((a, b) => b.createdAt - a.createdAt);
-
-    if (myW.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No withdrawals yet.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = myW.map(w => `
-      <tr>
-        <td data-label="Date">${formatDateTime(w.createdAt)}</td>
-        <td data-label="Amount">${formatZAR(w.amount)}</td>
-        <td data-label="Fee" class="text-red">- ${formatZAR(w.fee)}</td>
-        <td data-label="You Receive" class="text-green">${formatZAR(w.net)}</td>
-        <td data-label="Method">${methodLabel(w.method)}</td>
-        <td data-label="Status"><span class="badge badge-${w.status}">${statusDot(w.status)} ${w.status}</span></td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Could not load withdrawal history.</td></tr>`;
   }
 }
 

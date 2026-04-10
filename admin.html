@@ -25,9 +25,14 @@
       <div class="modal-title">🔒 Admin Login</div>
     </div>
     <p style="font-size:.9rem;color:var(--text-secondary);margin-bottom:1.25rem">
-      Enter your admin password to access the panel. This is verified securely by the backend — not stored in your browser.
+      Enter your admin username and password to access the panel.
+      This is verified securely by the backend — not stored in your browser.
     </p>
     <form id="admin-login-form">
+      <div class="form-group">
+        <label class="form-label" for="admin-username">Admin Username</label>
+        <input type="text" id="admin-username" class="form-input" placeholder="Enter admin username" autocomplete="username" required>
+      </div>
       <div class="form-group">
         <label class="form-label" for="admin-password">Admin Password</label>
         <div style="position:relative">

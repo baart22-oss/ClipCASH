@@ -1,36 +1,41 @@
 'use strict';
 
 /**
- * Withdrawal Routes
+ * Withdrawal Routes (all require a valid user JWT)
  *
  * POST /api/withdrawal/submit
  *   Creates a pending withdrawal request in the backend store.
  *   The request stays pending until an admin processes it via
  *   POST /api/admin/process-withdrawal.
  *
- * GET /api/withdrawal/my?userId=<id>
- *   Returns all withdrawal requests for a given user ID.
+ * GET /api/withdrawal/my
+ *   Returns all withdrawal requests for the authenticated user.
+ *   User identity is taken from the JWT, not a query parameter.
  */
 
 const express = require('express');
 const router  = express.Router();
 
-// Share the same in-memory store as the admin routes
-const { store } = require('./admin');
+const { requireUserJWT } = require('./auth');
+const { store, generateId } = require('./store');
 
 const WITHDRAWAL_FEE_RATE = 0.10;
 const WITHDRAWAL_MIN      = 50;
 
-function generateId() {
-  return 'cc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
-}
+// All routes below require a valid user JWT
+router.use(requireUserJWT);
 
 // ── POST /api/withdrawal/submit ─────────────────────────────────────────────
 router.post('/submit', (req, res) => {
-  const { userId, username, email, amount, method, account } = req.body || {};
+  // userId comes from the verified JWT, not the request body
+  const userId = req.userId;
+  const user   = store.users.find(u => u.id === userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  if (!userId || !amount || !method || !account) {
-    return res.status(400).json({ error: 'userId, amount, method, and account are required' });
+  const { amount, method, account } = req.body || {};
+
+  if (!amount || !method || !account) {
+    return res.status(400).json({ error: 'amount, method, and account are required' });
   }
 
   const parsedAmount = Number(amount);
@@ -38,36 +43,44 @@ router.post('/submit', (req, res) => {
     return res.status(400).json({ error: `Minimum withdrawal amount is R${WITHDRAWAL_MIN}` });
   }
 
+  if ((user.wallet || 0) < parsedAmount) {
+    return res.status(400).json({ error: 'Insufficient wallet balance' });
+  }
+
   const fee = parseFloat((parsedAmount * WITHDRAWAL_FEE_RATE).toFixed(2));
   const net = parseFloat((parsedAmount - fee).toFixed(2));
+  const now = Date.now();
+
+  // Deduct from wallet
+  user.wallet = parseFloat(((user.wallet || 0) - parsedAmount).toFixed(2));
 
   const withdrawal = {
     id:        generateId(),
-    userId,
-    username:  username || '',
-    email:     email    || '',
+    userId:    user.id,
+    username:  user.username,
+    email:     user.email,
     amount:    parsedAmount,
     fee,
     net,
     method,
     account,
     status:    'pending',
-    createdAt: Date.now(),
+    createdAt: now,
   };
 
   store.withdrawals.push(withdrawal);
 
-  // Also add a transaction log entry
+  // Transaction log entry
   store.transactions.push({
     id:        generateId(),
-    userId,
-    username:  username || '',
-    email:     email    || '',
+    userId:    user.id,
+    username:  user.username,
+    email:     user.email,
     type:      'withdrawal',
     amount:    parsedAmount,
     status:    'pending',
     note:      `${method} withdrawal`,
-    createdAt: Date.now(),
+    createdAt: now,
   });
 
   console.log(`[Withdrawal] Pending withdrawal created: ${withdrawal.id} for user ${userId} amount ${parsedAmount}`);
@@ -76,15 +89,9 @@ router.post('/submit', (req, res) => {
 
 // ── GET /api/withdrawal/my ──────────────────────────────────────────────────
 router.get('/my', (req, res) => {
-  const { userId } = req.query;
-  if (!userId) {
-    return res.status(400).json({ error: 'userId query parameter is required' });
-  }
-
   const myWithdrawals = store.withdrawals
-    .filter(w => w.userId === userId)
+    .filter(w => w.userId === req.userId)
     .sort((a, b) => b.createdAt - a.createdAt);
-
   return res.json({ withdrawals: myWithdrawals });
 });
 
