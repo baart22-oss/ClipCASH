@@ -20,10 +20,15 @@ const SUBSCRIPTION_TIERS = {
 };
 
 // ── PostgreSQL pool ───────────────────────────────────────────────────────────
+// Render sets RENDER=true for all web services. When running on Render, the
+// internal database uses a self-signed TLS certificate so we must disable
+// certificate verification. For all other environments (local dev, etc.) we
+// use the default SSL behaviour.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  // Render internal databases require SSL but use a self-signed certificate.
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_URL && process.env.RENDER
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -47,7 +52,7 @@ function rowToUser(r) {
     referralEarnings:      parseFloat(r.referral_earnings),
     subscription:          r.subscription,
     createdAt:             Number(r.created_at),
-    lastEarningsProcessed: r.last_earnings_processed != null ? Number(r.last_earnings_processed) : null,
+    lastEarningsProcessed: r.last_earnings_processed !== null && r.last_earnings_processed !== undefined ? Number(r.last_earnings_processed) : null,
     watchedTrailers:       r.watched_trailers || [],
   };
 }

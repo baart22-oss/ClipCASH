@@ -46,6 +46,16 @@ app.use('/api/auth/login',    authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/admin/login',   authLimiter);
 
+// Limit deposit initiations to prevent abuse (10 per 15 minutes per IP).
+const depositLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max:      10,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: { error: 'Too many deposit requests from this IP, please try again later.' },
+});
+app.use('/api/deposit/initiate', depositLimiter);
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/webhook',    webhookRoutes);
 app.use('/api/admin',      adminRoutes);

@@ -173,9 +173,9 @@ router.get('/users', async (_req, res) => {
 // ── POST /api/admin/sync — bulk-import data (for demo / migration) ─────────────
 router.post('/sync', async (req, res) => {
   const { users, withdrawals, transactions } = req.body;
-  if (users)        for (const u of users)        await store.saveUser(u);
-  if (withdrawals)  for (const w of withdrawals)  await store.saveWithdrawal(w);
-  if (transactions) for (const t of transactions) await store.saveTransaction(t);
+  if (users)        await Promise.all(users.map(u        => store.saveUser(u)));
+  if (withdrawals)  await Promise.all(withdrawals.map(w  => store.saveWithdrawal(w)));
+  if (transactions) await Promise.all(transactions.map(t => store.saveTransaction(t)));
 
   const [allUsers, allWithdrawals, allTransactions] = await Promise.all([
     store.getUsers(),
