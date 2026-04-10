@@ -18,6 +18,33 @@
 </nav>
 <div class="navbar-mobile" id="mobile-nav"></div>
 
+<!-- ── ADMIN LOGIN MODAL ──────────────────────────────────────────────────── -->
+<div id="admin-login-modal" class="modal-backdrop hidden">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">🔒 Admin Login</div>
+    </div>
+    <p style="font-size:.9rem;color:var(--text-secondary);margin-bottom:1.25rem">
+      Enter your admin password to access the panel. This is verified securely by the backend — not stored in your browser.
+    </p>
+    <form id="admin-login-form">
+      <div class="form-group">
+        <label class="form-label" for="admin-password">Admin Password</label>
+        <div style="position:relative">
+          <input type="password" id="admin-password" class="form-input" placeholder="Enter admin password" autocomplete="current-password" required>
+        </div>
+        <div class="form-error" id="admin-login-error"></div>
+      </div>
+      <button type="submit" id="admin-login-btn" class="btn btn-primary w-full mt-3">
+        🔑 Login to Admin Panel
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── ADMIN CONTENT ─────────────────────────────────────────────────────── -->
+<div id="admin-content" class="hidden">
+
 <!-- PAGE HEADER -->
 <div class="page-header">
   <div class="container">
@@ -26,7 +53,7 @@
         <h1>🔧 Admin Panel</h1>
         <p>Manage withdrawals, verify transactions, and monitor users.</p>
       </div>
-      <button class="btn btn-secondary btn-sm" id="demo-data-btn">🧪 Load Demo Data</button>
+      <button class="btn btn-secondary btn-sm" id="demo-data-btn">🧪 Sync Demo Data</button>
     </div>
   </div>
 </div>
@@ -161,6 +188,8 @@
 
   </div>
 </main>
+
+</div><!-- /#admin-content -->
 
 <div id="toast-container"></div>
 <script src="js/app.js"></script>

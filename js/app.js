@@ -4,6 +4,51 @@
 
 'use strict';
 
+// ── API Configuration ────────────────────────────────────────────────────────
+// Point this at your Render backend URL (no trailing slash).
+// For local development you can override this to http://localhost:3000.
+const API_BASE_URL = 'https://clipcash-kcif.onrender.com';
+
+/**
+ * Make an authenticated request to the backend.
+ * Admin routes require a valid admin session token (see getAdminToken()).
+ * User-facing routes (deposit/withdrawal) do not need an admin token.
+ *
+ * @param {string} path    - e.g. '/api/admin/stats'
+ * @param {object} [opts]  - fetch options (method, body, headers, …)
+ * @returns {Promise<any>} - parsed JSON response
+ * @throws  {Error}         with message from the server on non-2xx responses
+ */
+async function apiRequest(path, opts = {}) {
+  const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+
+  const adminToken = getAdminToken();
+  if (adminToken) headers['x-admin-key'] = adminToken;
+
+  const response = await fetch(API_BASE_URL + path, {
+    ...opts,
+    headers,
+    body: opts.body !== undefined
+      ? (typeof opts.body === 'string' ? opts.body : JSON.stringify(opts.body))
+      : undefined,
+  });
+
+  let data;
+  try { data = await response.json(); } catch { data = {}; }
+
+  if (!response.ok) {
+    throw Object.assign(new Error(data.error || `HTTP ${response.status}`), { status: response.status, data });
+  }
+  return data;
+}
+
+// ── Admin Session Token (sessionStorage — cleared on tab/browser close) ──────
+const LS_ADMIN_TOKEN = 'clipcash_admin_token';
+
+function getAdminToken()          { return sessionStorage.getItem(LS_ADMIN_TOKEN) || null; }
+function setAdminToken(token)     { sessionStorage.setItem(LS_ADMIN_TOKEN, token); }
+function clearAdminToken()        { sessionStorage.removeItem(LS_ADMIN_TOKEN); }
+
 // ── Subscription Tiers ──────────────────────────────────────────────────────
 const SUBSCRIPTION_TIERS = {
   free_intern: { name: 'Free Intern',  price: 0,     dailyROI: 0,    durationDays: 3,  maxEarnings: 0     },
@@ -110,13 +155,6 @@ function updateUserInStore(updatedUser) {
 function requireAuth() {
   const user = getCurrentUser();
   if (!user) { window.location.href = 'login.html'; return null; }
-  return user;
-}
-
-function requireAdmin() {
-  const user = requireAuth();
-  if (!user) return null;
-  if (!user.isAdmin) { window.location.href = 'index.html'; return null; }
   return user;
 }
 

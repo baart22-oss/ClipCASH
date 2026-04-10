@@ -4,8 +4,10 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 
-const webhookRoutes = require('./routes/webhook');
-const adminRoutes   = require('./routes/admin');
+const webhookRoutes    = require('./routes/webhook');
+const adminRoutes      = require('./routes/admin');
+const depositRoutes    = require('./routes/deposit');
+const withdrawalRoutes = require('./routes/withdrawal');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -25,8 +27,10 @@ app.use('/api/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-app.use('/api/webhook', webhookRoutes);
-app.use('/api/admin',   adminRoutes);
+app.use('/api/webhook',    webhookRoutes);
+app.use('/api/admin',      adminRoutes);
+app.use('/api/deposit',    depositRoutes);
+app.use('/api/withdrawal', withdrawalRoutes);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -46,7 +50,7 @@ app.use((err, _req, res, _next) => {
 // ── Start ─────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`ClipCash backend running on port ${PORT}`);
-  console.log('⚠️  For production: set YOCO_WEBHOOK_SECRET and ADMIN_API_KEY in .env');
+  console.log('⚠️  For production: set YOCO_WEBHOOK_SECRET, ADMIN_API_KEY, and ADMIN_PASSWORD in .env');
 });
 
 module.exports = app;
