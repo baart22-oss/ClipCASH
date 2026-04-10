@@ -26,10 +26,10 @@ const WITHDRAWAL_MIN      = 50;
 router.use(requireUserJWT);
 
 // ── POST /api/withdrawal/submit ─────────────────────────────────────────────
-router.post('/submit', (req, res) => {
+router.post('/submit', async (req, res) => {
   // userId comes from the verified JWT, not the request body
   const userId = req.userId;
-  const user   = store.users.find(u => u.id === userId);
+  const user   = await store.findUser(userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
   const { amount, method, account } = req.body || {};
@@ -53,6 +53,7 @@ router.post('/submit', (req, res) => {
 
   // Deduct from wallet
   user.wallet = parseFloat(((user.wallet || 0) - parsedAmount).toFixed(2));
+  await store.saveUser(user);
 
   const withdrawal = {
     id:        generateId(),
@@ -68,10 +69,10 @@ router.post('/submit', (req, res) => {
     createdAt: now,
   };
 
-  store.withdrawals.push(withdrawal);
+  await store.saveWithdrawal(withdrawal);
 
   // Transaction log entry
-  store.transactions.push({
+  await store.saveTransaction({
     id:        generateId(),
     userId:    user.id,
     username:  user.username,
@@ -88,10 +89,8 @@ router.post('/submit', (req, res) => {
 });
 
 // ── GET /api/withdrawal/my ──────────────────────────────────────────────────
-router.get('/my', (req, res) => {
-  const myWithdrawals = store.withdrawals
-    .filter(w => w.userId === req.userId)
-    .sort((a, b) => b.createdAt - a.createdAt);
+router.get('/my', async (req, res) => {
+  const myWithdrawals = await store.getUserWithdrawals(req.userId);
   return res.json({ withdrawals: myWithdrawals });
 });
 

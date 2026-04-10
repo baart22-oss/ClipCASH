@@ -22,10 +22,10 @@ const { requireUserJWT } = require('./auth');
 const { store, generateId } = require('./store');
 
 // ── POST /api/deposit/initiate ──────────────────────────────────────────────
-router.post('/initiate', requireUserJWT, (req, res) => {
+router.post('/initiate', requireUserJWT, async (req, res) => {
   // userId comes from the verified JWT, not the request body
   const userId   = req.userId;
-  const user     = store.users.find(u => u.id === userId);
+  const user     = await store.findUser(userId);
   const username = user ? user.username : '';
   const email    = user ? user.email    : '';
 
@@ -61,7 +61,7 @@ router.post('/initiate', requireUserJWT, (req, res) => {
     createdAt: Date.now(),
   };
 
-  store.transactions.push(transaction);
+  await store.saveTransaction(transaction);
   console.log(`[Deposit] Pending transaction created: ${txId} for user ${userId} tier ${tier}`);
 
   return res.status(201).json({ success: true, transactionId: txId, transaction });

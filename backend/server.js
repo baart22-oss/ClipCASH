@@ -13,7 +13,7 @@ const userRoutes       = require('./routes/user');
 const depositRoutes    = require('./routes/deposit');
 const withdrawalRoutes = require('./routes/withdrawal');
 
-const { store } = require('./routes/store');
+const { store, migrate } = require('./routes/store');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -70,13 +70,19 @@ app.use((err, _req, res, _next) => {
 });
 
 // ── Seed Demo Data ────────────────────────────────────────────────────────────
-// Creates a demo user in the in-memory store so the demo login works out of the box.
-// In production, remove this and use a real database with real user accounts.
+// Creates a demo user in the database so the demo login works out of the box.
+// Skipped automatically if the demo user already exists (idempotent).
 async function seedDemoData() {
+  const existing = await store.findUserByEmail('demo@clipcash.co.za');
+  if (existing) {
+    console.log('[Server] Demo user already exists, skipping seed');
+    return;
+  }
+
   const passwordHash = await bcrypt.hash('demo123', 10);
   const now = Date.now();
 
-  store.users.push({
+  await store.saveUser({
     id:                    'user_demo',
     username:              'DemoUser',
     email:                 'demo@clipcash.co.za',
@@ -101,11 +107,17 @@ async function seedDemoData() {
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-seedDemoData().then(() => {
-  app.listen(PORT, () => {
-    console.log(`ClipCASH backend running on port ${PORT}`);
-    console.log('⚠️  For production: set JWT_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD, and YOCO_WEBHOOK_SECRET in .env');
+migrate()
+  .then(() => seedDemoData())
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`ClipCASH backend running on port ${PORT}`);
+      console.log('⚠️  For production: set JWT_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD, and YOCO_WEBHOOK_SECRET in .env');
+    });
+  })
+  .catch(err => {
+    console.error('[Server] Startup error:', err.message);
+    process.exit(1);
   });
-});
 
 module.exports = app;

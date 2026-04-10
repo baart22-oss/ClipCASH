@@ -79,25 +79,13 @@ function requireAdminJWT(req, res, next) {
 router.use(requireAdminJWT);
 
 // ── GET /api/admin/stats ───────────────────────────────────────────────────────
-router.get('/stats', (_req, res) => {
-  const pendingWithdrawals    = store.withdrawals.filter(w => w.status === 'pending').length;
-  const pendingTransactions   = store.transactions.filter(t => t.status === 'pending').length;
-  const totalWithdrawalVolume = store.withdrawals.reduce((sum, w) => sum + (w.amount || 0), 0);
-
-  res.json({
-    totalUsers:          store.users.length,
-    pendingWithdrawals,
-    pendingTransactions,
-    totalWithdrawalVolume,
-    activeSubscriptions: store.users.filter(u => u.subscriptionActive ||
-      (u.subscription && u.subscription.expiresAt > Date.now() && u.subscription.tier !== 'free_intern')
-    ).length,
-    timestamp: new Date().toISOString(),
-  });
+router.get('/stats', async (_req, res) => {
+  const stats = await store.getStats();
+  res.json({ ...stats, timestamp: new Date().toISOString() });
 });
 
 // ── POST /api/admin/verify-transaction ────────────────────────────────────────
-router.post('/verify-transaction', (req, res) => {
+router.post('/verify-transaction', async (req, res) => {
   const { transactionId, action } = req.body;
   if (!transactionId || !action) {
     return res.status(400).json({ error: 'transactionId and action are required' });
@@ -106,7 +94,7 @@ router.post('/verify-transaction', (req, res) => {
     return res.status(400).json({ error: 'action must be "approve" or "reject"' });
   }
 
-  const tx = store.transactions.find(t => t.id === transactionId);
+  const tx = await store.findTransaction(transactionId);
   if (!tx)                     return res.status(404).json({ error: 'Transaction not found' });
   if (tx.status !== 'pending') return res.status(400).json({ error: 'Transaction is not pending' });
 
@@ -114,12 +102,15 @@ router.post('/verify-transaction', (req, res) => {
   tx.processedAt = new Date().toISOString();
   tx.processedBy = 'admin';
 
+  await store.saveTransaction(tx);
+
   if (action === 'approve') {
-    const user = store.users.find(u => u.id === tx.userId);
+    const user = await store.findUser(tx.userId);
     if (user) {
       user.subscriptionActive = true;
       user.subscriptionTier   = tx.tier;
       user.subscriptionStart  = new Date().toISOString();
+      await store.saveUser(user);
     }
   }
 
@@ -128,7 +119,7 @@ router.post('/verify-transaction', (req, res) => {
 });
 
 // ── POST /api/admin/process-withdrawal ────────────────────────────────────────
-router.post('/process-withdrawal', (req, res) => {
+router.post('/process-withdrawal', async (req, res) => {
   const { withdrawalId, action } = req.body;
   if (!withdrawalId || !action) {
     return res.status(400).json({ error: 'withdrawalId and action are required' });
@@ -137,7 +128,7 @@ router.post('/process-withdrawal', (req, res) => {
     return res.status(400).json({ error: 'action must be "approve" or "reject"' });
   }
 
-  const w = store.withdrawals.find(x => x.id === withdrawalId);
+  const w = await store.findWithdrawal(withdrawalId);
   if (!w)                     return res.status(404).json({ error: 'Withdrawal not found' });
   if (w.status !== 'pending') return res.status(400).json({ error: 'Withdrawal is not pending' });
 
@@ -145,9 +136,14 @@ router.post('/process-withdrawal', (req, res) => {
   w.processedAt = new Date().toISOString();
   w.processedBy = 'admin';
 
+  await store.saveWithdrawal(w);
+
   if (action === 'reject') {
-    const user = store.users.find(u => u.id === w.userId);
-    if (user) user.wallet = parseFloat(((user.wallet || 0) + w.amount).toFixed(2));
+    const user = await store.findUser(w.userId);
+    if (user) {
+      user.wallet = parseFloat(((user.wallet || 0) + w.amount).toFixed(2));
+      await store.saveUser(user);
+    }
   }
 
   console.log(`[Admin] Withdrawal ${withdrawalId} ${w.status}`);
@@ -155,34 +151,43 @@ router.post('/process-withdrawal', (req, res) => {
 });
 
 // ── GET /api/admin/withdrawals ─────────────────────────────────────────────────
-router.get('/withdrawals', (_req, res) => {
-  res.json({ withdrawals: store.withdrawals });
+router.get('/withdrawals', async (_req, res) => {
+  const withdrawals = await store.getWithdrawals();
+  res.json({ withdrawals });
 });
 
 // ── GET /api/admin/transactions ────────────────────────────────────────────────
-router.get('/transactions', (_req, res) => {
-  res.json({ transactions: store.transactions });
+router.get('/transactions', async (_req, res) => {
+  const transactions = await store.getTransactions();
+  res.json({ transactions });
 });
 
 // ── GET /api/admin/users ───────────────────────────────────────────────────────
-router.get('/users', (_req, res) => {
+router.get('/users', async (_req, res) => {
+  const users = await store.getUsers();
   res.json({
-    users: store.users.map(u => ({ ...u, passwordHash: undefined, password: undefined })),
+    users: users.map(u => ({ ...u, passwordHash: undefined, password: undefined })),
   });
 });
 
 // ── POST /api/admin/sync — bulk-import data (for demo / migration) ─────────────
-router.post('/sync', (req, res) => {
+router.post('/sync', async (req, res) => {
   const { users, withdrawals, transactions } = req.body;
-  if (users)        store.users        = users;
-  if (withdrawals)  store.withdrawals  = withdrawals;
-  if (transactions) store.transactions = transactions;
+  if (users)        for (const u of users)        await store.saveUser(u);
+  if (withdrawals)  for (const w of withdrawals)  await store.saveWithdrawal(w);
+  if (transactions) for (const t of transactions) await store.saveTransaction(t);
+
+  const [allUsers, allWithdrawals, allTransactions] = await Promise.all([
+    store.getUsers(),
+    store.getWithdrawals(),
+    store.getTransactions(),
+  ]);
   res.json({
     success: true,
     synced: {
-      users:        store.users.length,
-      withdrawals:  store.withdrawals.length,
-      transactions: store.transactions.length,
+      users:        allUsers.length,
+      withdrawals:  allWithdrawals.length,
+      transactions: allTransactions.length,
     },
   });
 });

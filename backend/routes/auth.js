@@ -67,17 +67,17 @@ router.post('/register', async (req, res) => {
 
   const emailLower = email.toLowerCase();
 
-  if (store.users.find(u => u.email.toLowerCase() === emailLower)) {
+  if (await store.findUserByEmail(emailLower)) {
     return res.status(409).json({ error: 'An account with this email already exists' });
   }
-  if (store.users.find(u => u.username.toLowerCase() === username.toLowerCase())) {
+  if (await store.findUserByUsername(username)) {
     return res.status(409).json({ error: 'Username is already taken' });
   }
 
   // Validate referral code
   let referredBy = null;
   if (referralCode) {
-    const referrer = store.users.find(u => u.referralCode === referralCode.toUpperCase());
+    const referrer = await store.findUserByReferralCode(referralCode.toUpperCase());
     if (!referrer) {
       return res.status(400).json({ error: 'Invalid referral code' });
     }
@@ -108,7 +108,7 @@ router.post('/register', async (req, res) => {
     watchedTrailers:       [],
   };
 
-  store.users.push(newUser);
+  await store.saveUser(newUser);
 
   const token = signUserToken(newUser);
   const { passwordHash: _ph, ...safeUser } = newUser;
@@ -125,7 +125,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'email and password are required' });
   }
 
-  const user = store.users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  const user = await store.findUserByEmail(email.toLowerCase());
 
   // Always run bcrypt.compare to prevent timing-based user-enumeration attacks.
   const dummyHash = '$2a$10$invalidhashpadding000000000000000000000000000000000000';
@@ -137,8 +137,7 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  // Credit any pending ROI earnings since last login
-  processPendingEarnings(user);
+  await processPendingEarnings(user);
 
   const token = signUserToken(user);
   const { passwordHash: _ph, ...safeUser } = user;
@@ -148,7 +147,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ── Internal: process pending daily ROI ───────────────────────────────────────
-function processPendingEarnings(user) {
+async function processPendingEarnings(user) {
   const tierKey = user.subscription && user.subscription.tier;
   const tier    = SUBSCRIPTION_TIERS[tierKey];
   if (!tier || tier.dailyROI === 0) return;
@@ -171,6 +170,7 @@ function processPendingEarnings(user) {
   }
 
   user.lastEarningsProcessed = now;
+  await store.saveUser(user);
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
