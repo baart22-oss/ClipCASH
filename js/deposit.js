@@ -7,9 +7,16 @@
 let currentUser     = null;
 let selectedTierKey = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   currentUser = requireAuth();
   if (!currentUser) return;
+
+  // Refresh user data from backend
+  try {
+    const data = await apiRequest('/api/user/me');
+    currentUser = data.user;
+    saveCurrentUser(currentUser);
+  } catch (_err) { /* use cached user */ }
 
   renderPlanCards();
   renderCurrentSub();
@@ -32,10 +39,10 @@ function renderPlanCards() {
   const popular = 'gold';
 
   grid.innerHTML = tiers.map(([key, tier]) => {
-    const icon       = TIER_ICONS[key] || '🎬';
-    const isFree     = tier.price === 0;
-    const isPopular  = key === popular;
-    const maxReturn  = tier.maxEarnings > 0 ? formatZAR(tier.maxEarnings) : 'N/A';
+    const icon      = TIER_ICONS[key] || '🎬';
+    const isFree    = tier.price === 0;
+    const isPopular = key === popular;
+    const maxReturn = tier.maxEarnings > 0 ? formatZAR(tier.maxEarnings) : 'N/A';
 
     return `
       <div class="plan-card ${isPopular ? 'popular' : ''}" id="plan-${key}" onclick="selectPlan('${key}')">
@@ -80,10 +87,10 @@ function renderPlanCards() {
 }
 
 function renderCurrentSub() {
-  const sub      = currentUser.subscription;
-  const tierKey  = sub?.tier;
-  const tier     = tierKey ? SUBSCRIPTION_TIERS[tierKey] : null;
-  const el       = document.getElementById('current-sub-info');
+  const sub     = currentUser.subscription;
+  const tierKey = sub?.tier;
+  const tier    = tierKey ? SUBSCRIPTION_TIERS[tierKey] : null;
+  const el      = document.getElementById('current-sub-info');
   if (!el) return;
 
   if (!sub || !tier) {
@@ -142,8 +149,7 @@ function selectAndPay(key) {
     return;
   }
 
-  // Open payment modal
-  const modal = document.getElementById('modal-backdrop');
+  const modal  = document.getElementById('modal-backdrop');
   const mTitle = document.getElementById('modal-plan-name');
   const mPrice = document.getElementById('modal-plan-price');
   const mIcon  = document.getElementById('modal-plan-icon');
@@ -156,24 +162,12 @@ function selectAndPay(key) {
   const walletBal = currentUser.wallet || 0;
   const walletBtn = document.getElementById('pay-wallet-btn');
   if (walletBtn) {
-    walletBtn.disabled = walletBal < tier.price;
-    walletBtn.title    = walletBal < tier.price ? 'Insufficient wallet balance' : '';
+    walletBtn.disabled    = walletBal < tier.price;
+    walletBtn.title       = walletBal < tier.price ? 'Insufficient wallet balance' : '';
     walletBtn.textContent = walletBal < tier.price
       ? `Wallet Balance Insufficient (${formatZAR(walletBal)})`
       : `Pay with Wallet (${formatZAR(walletBal)})`;
   }
-}
-
-function activateFreeIntern() {
-  const now  = Date.now();
-  currentUser.subscription = {
-    tier:        'free_intern',
-    activatedAt: now,
-    expiresAt:   now + 3 * 86400000,
-  };
-  updateUserInStore(currentUser);
-  renderCurrentSub();
-  showToast('Free Intern plan activated! Watch trailers to explore. 🎬', 'success');
 }
 
 function closeModal() {
@@ -182,38 +176,50 @@ function closeModal() {
 }
 
 // ── Payment Methods ───────────────────────────────────────────────────────────
-function payWithWallet() {
-  if (!selectedTierKey) return;
-  const tier  = SUBSCRIPTION_TIERS[selectedTierKey];
-  const price = tier.price;
+async function activateFreeIntern() {
+  try {
+    const data  = await apiRequest('/api/user/subscription', {
+      method: 'POST',
+      body: { tier: 'free_intern' },
+    });
+    currentUser = data.user;
+    saveCurrentUser(currentUser);
+    renderCurrentSub();
+    showToast('Free Intern plan activated! Watch trailers to explore. 🎬', 'success');
+  } catch (err) {
+    showToast('Activation failed: ' + err.message, 'error');
+  }
+}
 
-  if ((currentUser.wallet || 0) < price) {
+async function payWithWallet() {
+  if (!selectedTierKey) return;
+  const tier = SUBSCRIPTION_TIERS[selectedTierKey];
+
+  if ((currentUser.wallet || 0) < tier.price) {
     showToast('Insufficient wallet balance.', 'error');
     return;
   }
 
-  const now = Date.now();
-  currentUser.wallet = parseFloat(((currentUser.wallet || 0) - price).toFixed(2));
-  currentUser.subscription = {
-    tier:        selectedTierKey,
-    activatedAt: now,
-    expiresAt:   now + tier.durationDays * 86400000,
-  };
-  currentUser.totalEarned = 0; // Reset for new plan cycle
-  currentUser.lastEarningsProcessed = now;
-  updateUserInStore(currentUser);
+  const btn = document.getElementById('pay-wallet-btn');
+  if (btn) btn.disabled = true;
 
-  // Credit referral bonuses
-  creditReferralBonuses(currentUser, price);
+  try {
+    const data  = await apiRequest('/api/user/subscription', {
+      method: 'POST',
+      body: { tier: selectedTierKey, method: 'wallet' },
+    });
+    currentUser = data.user;
+    saveCurrentUser(currentUser);
 
-  // Log transaction
-  addTransaction(currentUser.id, 'deposit', price, tier.name + ' plan via Wallet', 'approved');
-
-  closeModal();
-  showToast(`✅ ${tier.name} plan activated! Earning starts now.`, 'success');
-  renderCurrentSub();
-  renderWalletBalance();
-  renderPlanCards();
+    closeModal();
+    showToast(`✅ ${tier.name} plan activated! Earning starts now.`, 'success');
+    renderCurrentSub();
+    renderWalletBalance();
+    renderPlanCards();
+  } catch (err) {
+    showToast('Payment failed: ' + err.message, 'error');
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function payWithYoco() {
@@ -227,12 +233,10 @@ async function payWithYoco() {
     // Create a pending deposit transaction on the backend.
     // The transaction stays pending until the Yoco webhook fires (payment.succeeded)
     // or an admin verifies it via the admin panel.
+    // userId is derived from the JWT on the backend — not sent by the client.
     await apiRequest('/api/deposit/initiate', {
       method: 'POST',
       body: {
-        userId:   currentUser.id,
-        username: currentUser.username,
-        email:    currentUser.email,
         tier:     selectedTierKey,
         tierName: tier.name,
         amount:   tier.price,
@@ -242,9 +246,6 @@ async function payWithYoco() {
 
     closeModal();
     showToast(`💳 Yoco payment initiated for ${tier.name}. Admin will verify shortly.`, 'info', 6000);
-
-    // In production this would redirect to the Yoco payment page returned by the backend.
-    // window.location.href = data.checkoutUrl;
   } catch (err) {
     showToast('Failed to initiate payment: ' + err.message, 'error');
   } finally {

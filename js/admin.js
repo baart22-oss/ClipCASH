@@ -61,6 +61,7 @@ function hideLoginModal() {
 
 async function handleAdminLogin(e) {
   e.preventDefault();
+  const username = document.getElementById('admin-username')?.value.trim() || '';
   const password = document.getElementById('admin-password')?.value || '';
   const btn      = document.getElementById('admin-login-btn');
   const errorEl  = document.getElementById('admin-login-error');
@@ -71,7 +72,7 @@ async function handleAdminLogin(e) {
   try {
     const data = await apiRequest('/api/admin/login', {
       method: 'POST',
-      body: { password },
+      body: { username, password },
     });
     setAdminToken(data.token);
     hideLoginModal();
@@ -81,7 +82,7 @@ async function handleAdminLogin(e) {
   } catch (err) {
     if (errorEl) {
       errorEl.textContent = err.status === 401
-        ? 'Incorrect admin password.'
+        ? 'Incorrect username or password.'
         : 'Login failed: ' + err.message;
       errorEl.classList.add('show');
     }
