@@ -74,7 +74,7 @@ function setMaxAmount() {
 }
 
 // ── Submit Withdrawal ─────────────────────────────────────────────────────────
-function handleWithdrawal(e) {
+async function handleWithdrawal(e) {
   e.preventDefault();
 
   const amount  = parseFloat(document.getElementById('withdrawal-amount')?.value) || 0;
@@ -98,70 +98,94 @@ function handleWithdrawal(e) {
 
   if (btn) btn.disabled = true;
 
-  const fee    = parseFloat((amount * WITHDRAWAL_FEE_RATE).toFixed(2));
-  const net    = parseFloat((amount - fee).toFixed(2));
-  const now    = Date.now();
+  const fee = parseFloat((amount * WITHDRAWAL_FEE_RATE).toFixed(2));
+  const net = parseFloat((amount - fee).toFixed(2));
 
-  // Deduct from wallet
+  // Deduct from local wallet for immediate UI feedback
   currentUser.wallet = parseFloat(((currentUser.wallet || 0) - amount).toFixed(2));
   updateUserInStore(currentUser);
 
-  // Create withdrawal request in admin data
-  const admin = getAdminData();
-  admin.withdrawals.push({
-    id:        generateId(),
-    userId:    currentUser.id,
-    username:  currentUser.username,
-    email:     currentUser.email,
-    amount,
-    fee,
-    net,
-    method,
-    account,
-    status:    'pending',
-    createdAt: now,
-  });
-  saveAdminData(admin);
+  try {
+    // Submit withdrawal request to the backend — this is the authoritative record.
+    await apiRequest('/api/withdrawal/submit', {
+      method: 'POST',
+      body: {
+        userId:   currentUser.id,
+        username: currentUser.username,
+        email:    currentUser.email,
+        amount,
+        method,
+        account,
+      },
+    });
 
-  // Log transaction
-  addTransaction(currentUser.id, 'withdrawal', amount, `${method} withdrawal`, 'pending');
+    // Reset form
+    const form = document.getElementById('withdrawal-form');
+    if (form) form.reset();
+    updateFeeBreakdown();
+    renderWalletInfo();
+    await renderWithdrawalHistory();
 
-  // Reset form
-  const form = document.getElementById('withdrawal-form');
-  if (form) form.reset();
-  updateFeeBreakdown();
-  renderWalletInfo();
-  renderWithdrawalHistory();
-
-  showToast(`✅ Withdrawal of ${formatZAR(amount)} submitted! You'll receive ${formatZAR(net)} after fees.`, 'success', 6000);
-  if (btn) btn.disabled = false;
+    showToast(`Withdrawal of ${formatZAR(amount)} submitted! You'll receive ${formatZAR(net)} after fees.`, 'success', 6000);
+  } catch (err) {
+    // Refund the local wallet deduction if the backend call failed
+    currentUser.wallet = parseFloat(((currentUser.wallet || 0) + amount).toFixed(2));
+    updateUserInStore(currentUser);
+    renderWalletInfo();
+    showToast('Withdrawal failed: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── Withdrawal History ────────────────────────────────────────────────────────
-function renderWithdrawalHistory() {
+async function renderWithdrawalHistory() {
   const tbody = document.getElementById('withdrawal-tbody');
   if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>`;
 
-  const admin = getAdminData();
-  const myW   = admin.withdrawals
-    .filter(w => w.userId === currentUser.id)
-    .sort((a, b) => b.createdAt - a.createdAt);
+  try {
+    const data = await apiRequest('/api/withdrawal/my?userId=' + encodeURIComponent(currentUser.id));
+    const myW  = data.withdrawals || [];
 
-  if (myW.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No withdrawals yet.</td></tr>`;
-    return;
+    if (myW.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No withdrawals yet.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = myW.map(w => `
+      <tr>
+        <td data-label="Date">${formatDateTime(w.createdAt)}</td>
+        <td data-label="Amount">${formatZAR(w.amount)}</td>
+        <td data-label="Fee" class="text-red">- ${formatZAR(w.fee)}</td>
+        <td data-label="You Receive" class="text-green">${formatZAR(w.net)}</td>
+        <td data-label="Method">${methodLabel(w.method)}</td>
+        <td data-label="Status"><span class="badge badge-${w.status}">${statusDot(w.status)} ${w.status}</span></td>
+      </tr>
+    `).join('');
+  } catch (_err) {
+    // Fallback to localStorage history if backend is unreachable
+    const admin = getAdminData();
+    const myW   = admin.withdrawals
+      .filter(w => w.userId === currentUser.id)
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    if (myW.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">No withdrawals yet.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = myW.map(w => `
+      <tr>
+        <td data-label="Date">${formatDateTime(w.createdAt)}</td>
+        <td data-label="Amount">${formatZAR(w.amount)}</td>
+        <td data-label="Fee" class="text-red">- ${formatZAR(w.fee)}</td>
+        <td data-label="You Receive" class="text-green">${formatZAR(w.net)}</td>
+        <td data-label="Method">${methodLabel(w.method)}</td>
+        <td data-label="Status"><span class="badge badge-${w.status}">${statusDot(w.status)} ${w.status}</span></td>
+      </tr>
+    `).join('');
   }
-
-  tbody.innerHTML = myW.map(w => `
-    <tr>
-      <td data-label="Date">${formatDateTime(w.createdAt)}</td>
-      <td data-label="Amount">${formatZAR(w.amount)}</td>
-      <td data-label="Fee" class="text-red">- ${formatZAR(w.fee)}</td>
-      <td data-label="You Receive" class="text-green">${formatZAR(w.net)}</td>
-      <td data-label="Method">${methodLabel(w.method)}</td>
-      <td data-label="Status"><span class="badge badge-${w.status}">${statusDot(w.status)} ${w.status}</span></td>
-    </tr>
-  `).join('');
 }
 
 function methodLabel(method) {

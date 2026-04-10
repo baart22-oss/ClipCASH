@@ -216,34 +216,40 @@ function payWithWallet() {
   renderPlanCards();
 }
 
-function payWithYoco() {
+async function payWithYoco() {
   if (!selectedTierKey) return;
   const tier = SUBSCRIPTION_TIERS[selectedTierKey];
 
-  // Create pending transaction for admin review
-  const admin  = getAdminData();
-  const txId   = generateId();
-  admin.transactions.push({
-    id:        txId,
-    userId:    currentUser.id,
-    username:  currentUser.username,
-    email:     currentUser.email,
-    type:      'deposit',
-    tier:      selectedTierKey,
-    tierName:  tier.name,
-    amount:    tier.price,
-    status:    'pending',
-    method:    'yoco',
-    note:      'Yoco payment pending verification',
-    createdAt: Date.now(),
-  });
-  saveAdminData(admin);
+  const btn = document.getElementById('pay-yoco-btn');
+  if (btn) btn.disabled = true;
 
-  closeModal();
-  showToast(`💳 Yoco payment initiated for ${tier.name}. Admin will verify shortly.`, 'info', 6000);
+  try {
+    // Create a pending deposit transaction on the backend.
+    // The transaction stays pending until the Yoco webhook fires (payment.succeeded)
+    // or an admin verifies it via the admin panel.
+    await apiRequest('/api/deposit/initiate', {
+      method: 'POST',
+      body: {
+        userId:   currentUser.id,
+        username: currentUser.username,
+        email:    currentUser.email,
+        tier:     selectedTierKey,
+        tierName: tier.name,
+        amount:   tier.price,
+        method:   'yoco',
+      },
+    });
 
-  // In production this would redirect to Yoco payment page
-  // window.location.href = `https://pay.yoco.com/...?amount=${tier.price * 100}&currency=ZAR`;
+    closeModal();
+    showToast(`💳 Yoco payment initiated for ${tier.name}. Admin will verify shortly.`, 'info', 6000);
+
+    // In production this would redirect to the Yoco payment page returned by the backend.
+    // window.location.href = data.checkoutUrl;
+  } catch (err) {
+    showToast('Failed to initiate payment: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ── DOM Helper ────────────────────────────────────────────────────────────────

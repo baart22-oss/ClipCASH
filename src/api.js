@@ -1,14 +1,12 @@
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://your-backend-url.render.com';
-
-// Example API call function
-async function fetchData(endpoint) {
-    const response = await fetch(`${API_BASE_URL}/${endpoint}`);
-    if (!response.ok) {
-        throw new Error('Network response was not ok');
-    }
-    return await response.json();
-}
-
-// Replace localStorage references with API calls where possible
-// Example:
-// const paymentData = await fetchData('payments');
+/**
+ * ClipCASH API configuration
+ *
+ * The frontend API base URL and helpers are defined in js/app.js:
+ *
+ *   const API_BASE_URL = 'https://clipcash-kcif.onrender.com';
+ *
+ *   async function apiRequest(path, opts = {}) { ... }
+ *
+ * See js/app.js for the full implementation.
+ * See backend/.env.example for required Render environment variables.
+ */
