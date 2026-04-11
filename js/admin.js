@@ -8,12 +8,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initAdminPage();
 });
 
-// ── Admin page bootstrap ──────────────────────────────────────────────────────
 async function initAdminPage() {
   const token = getAdminToken();
 
   if (token) {
-    // Validate the stored token by fetching stats
     try {
       await loadAdminStats();
       showAdminContent();
@@ -23,23 +21,20 @@ async function initAdminPage() {
         showLoginModal();
       } else {
         showToast('Failed to connect to backend: ' + err.message, 'error');
-        showAdminContent(); // show UI even if backend unreachable
+        showAdminContent();
       }
     }
   } else {
     showLoginModal();
   }
 
-  // Tab buttons
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => switchAdminTab(btn.dataset.tab));
   });
 
-  // Demo data button (syncs localStorage demo data to backend)
   document.getElementById('demo-data-btn')?.addEventListener('click', seedAdminDemoData);
 }
 
-// ── Admin login modal ─────────────────────────────────────────────────────────
 function showLoginModal() {
   document.getElementById('admin-content')?.classList.add('hidden');
   const modal = document.getElementById('admin-login-modal');
@@ -93,7 +88,6 @@ function showAdminContent() {
   switchAdminTab('withdrawals');
 }
 
-// ── Tab Switching ─────────────────────────────────────────────────────────────
 function switchAdminTab(tabId) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tabId));
@@ -103,7 +97,6 @@ function switchAdminTab(tabId) {
   else if (tabId === 'users')         renderUsers();
 }
 
-// ── Stats Overview ────────────────────────────────────────────────────────────
 async function loadAdminStats() {
   const data = await apiRequest('/api/admin/stats');
   setEl('stat-pending-w',   data.pendingWithdrawals   || 0);
@@ -118,7 +111,6 @@ function renderAdminStats() {
   loadAdminStats().catch(err => showToast('Stats error: ' + err.message, 'error'));
 }
 
-// ── Withdrawals Table ─────────────────────────────────────────────────────────
 async function renderWithdrawals() {
   const tbody = document.getElementById('withdrawals-tbody');
   if (!tbody) return;
@@ -153,8 +145,8 @@ async function renderWithdrawals() {
         <td data-label="Actions">
           ${w.status === 'pending' ? `
             <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-              <button class="btn btn-success btn-sm" onclick="approveWithdrawal('${w.id}')">&#x2705; Approve</button>
-              <button class="btn btn-danger btn-sm"  onclick="rejectWithdrawal('${w.id}')">&#x2717; Reject</button>
+              <button class="btn btn-success btn-sm" onclick="approveWithdrawal('${w.id}')">✅ Approve</button>
+              <button class="btn btn-danger btn-sm"  onclick="rejectWithdrawal('${w.id}')">✗ Reject</button>
             </div>
           ` : `<span class="text-muted" style="font-size:.8rem">—</span>`}
         </td>
@@ -193,21 +185,19 @@ async function rejectWithdrawal(id) {
   }
 }
 
-// ── Transactions Table ────────────────────────────────────────────────────────
-let _allDeposits = []; // cache for client-side email filter
+let _allDeposits = [];
 
 async function renderTransactions() {
   const tbody = document.getElementById('transactions-tbody');
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>`;
 
-  // Reset filter input when refreshing
   const filterInput = document.getElementById('tx-email-filter');
   if (filterInput) filterInput.value = '';
 
   try {
-    const data    = await apiRequest('/api/admin/transactions');
-    _allDeposits  = [...(data.transactions || [])]
+    const data = await apiRequest('/api/admin/transactions');
+    _allDeposits = [...(data.transactions || [])]
       .filter(t => t.type === 'deposit')
       .sort((a, b) => b.createdAt - a.createdAt);
 
@@ -221,9 +211,10 @@ function filterTransactions() {
   const q = (document.getElementById('tx-email-filter')?.value || '').toLowerCase().trim();
   const filtered = q
     ? _allDeposits.filter(t =>
-        (t.email    || '').toLowerCase().includes(q) ||
+        (t.email || '').toLowerCase().includes(q) ||
         (t.username || '').toLowerCase().includes(q))
     : _allDeposits;
+
   renderTransactionRows(filtered);
 }
 
@@ -243,20 +234,20 @@ function renderTransactionRows(deposits) {
           <div class="user-avatar">${(t.username || 'U')[0].toUpperCase()}</div>
           <div>
             <div class="user-name">${t.username || '—'}</div>
-            <div class="user-email">${t.email    || '—'}</div>
+            <div class="user-email">${t.email || '—'}</div>
           </div>
         </div>
       </td>
-      <td data-label="Plan">${TIER_ICONS[t.tier] || '&#x1F3AC;'} ${t.tierName || t.note || '—'}</td>
+      <td data-label="Plan">${TIER_ICONS[t.tier] || '🎬'} ${t.tierName || t.note || '—'}</td>
       <td data-label="Amount">${formatZAR(t.amount)}</td>
-      <td data-label="Method">${t.method === 'yoco' ? '&#x1F4B3; Yoco' : '&#x1F45B; Wallet'}</td>
+      <td data-label="Method">${t.method === 'yoco' ? '💳 Yoco' : '👕 Wallet'}</td>
       <td data-label="Date">${formatDateTime(t.createdAt)}</td>
       <td data-label="Status"><span class="badge badge-${t.status}"><span class="badge-dot"></span>${t.status}</span></td>
       <td data-label="Actions">
         ${t.status === 'pending' ? `
           <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-            <button class="btn btn-success btn-sm" onclick="verifyTransaction('${t.id}')">&#x2705; Verify</button>
-            <button class="btn btn-danger btn-sm"  onclick="rejectTransaction('${t.id}')">&#x2717; Reject</button>
+            <button class="btn btn-success btn-sm" onclick="verifyTransaction('${t.id}')">✅ Verify</button>
+            <button class="btn btn-danger btn-sm"  onclick="rejectTransaction('${t.id}')">✗ Reject</button>
           </div>
         ` : `<span class="text-muted" style="font-size:.8rem">—</span>`}
       </td>
@@ -292,7 +283,6 @@ async function rejectTransaction(id) {
   }
 }
 
-// ── Users Table ───────────────────────────────────────────────────────────────
 async function renderUsers() {
   const tbody = document.getElementById('users-tbody');
   if (!tbody) return;
@@ -322,12 +312,12 @@ async function renderUsers() {
               </div>
             </div>
           </td>
-          <td data-label="Wallet"     class="text-gold">${formatZAR(u.wallet || u.walletBalance || 0)}</td>
-          <td data-label="Earned"     class="text-green">${formatZAR(u.totalEarned || 0)}</td>
+          <td data-label="Wallet" class="text-gold">${formatZAR(u.wallet || u.walletBalance || 0)}</td>
+          <td data-label="Earned" class="text-green">${formatZAR(u.totalEarned || 0)}</td>
           <td data-label="Referrals">${formatZAR(u.referralEarnings || 0)}</td>
           <td data-label="Plan">
             <span class="badge ${active && tier?.price > 0 ? 'badge-active' : 'badge-free'}">
-              ${TIER_ICONS[tierKey] || '&#x1F3AC;'} ${tier?.name || 'None'}
+              ${TIER_ICONS[tierKey] || '🎬'} ${tier?.name || 'None'}
             </span>
           </td>
           <td data-label="Status">
@@ -345,7 +335,6 @@ async function renderUsers() {
   }
 }
 
-// ── Demo Data Seeder (syncs localStorage demo data to backend) ─────────────────
 async function seedAdminDemoData() {
   try {
     const users     = getUsers();
@@ -366,7 +355,6 @@ async function seedAdminDemoData() {
   }
 }
 
-// ── DOM Helper ───────────────────────────────────────────────────────────���────
 function setEl(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
