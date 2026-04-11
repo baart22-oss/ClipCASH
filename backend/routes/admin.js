@@ -101,7 +101,7 @@ router.post('/verify-transaction', async (req, res) => {
     const user = await store.findUser(tx.userId);
     if (user) {
       const tier = SUBSCRIPTION_TIERS[tx.tier];
-      const now   = Date.now();
+      const now = Date.now();
 
       user.subscription = {
         tier: tx.tier,
@@ -109,7 +109,7 @@ router.post('/verify-transaction', async (req, res) => {
         expiresAt: tier ? now + tier.durationDays * 86400000 : null,
       };
 
-      // Optional compatibility fields for older code paths
+      // Compatibility fields for older code paths
       user.subscriptionActive = true;
       user.subscriptionTier   = tx.tier;
       user.subscriptionStart  = new Date(now).toISOString();
