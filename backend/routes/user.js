@@ -19,7 +19,7 @@ const { store, SUBSCRIPTION_TIERS, generateId } = require('./store');
 // All routes below require a valid user JWT
 router.use(requireUserJWT);
 
-// ── GET /api/user/me ──────────────────────────────────────────────────────────
+// ── GET /api/user/me ─────────────────────────────────────────────────────────
 router.get('/me', async (req, res) => {
   const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -27,22 +27,25 @@ router.get('/me', async (req, res) => {
   return res.json({ user: safeUser });
 });
 
-// ── PATCH /api/user/me — update non-sensitive mutable fields ──────────────────
+// ── PATCH /api/user/me — update non-sensitive mutable fields ─────────────────
 router.patch('/me', async (req, res) => {
   const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const { watchedTrailers, lastEarningsProcessed } = req.body || {};
+  const { watchedTrailers, lastEarningsProcessed, dailyEarnings, dailyEarningsDate, dailyClipsWatched } = req.body || {};
 
-  if (Array.isArray(watchedTrailers))          user.watchedTrailers       = watchedTrailers;
+  if (Array.isArray(watchedTrailers)) user.watchedTrailers = watchedTrailers;
   if (typeof lastEarningsProcessed === 'number') user.lastEarningsProcessed = lastEarningsProcessed;
+  if (typeof dailyEarnings === 'number') user.dailyEarnings = dailyEarnings;
+  if (typeof dailyEarningsDate === 'string') user.dailyEarningsDate = dailyEarningsDate;
+  if (typeof dailyClipsWatched === 'number') user.dailyClipsWatched = dailyClipsWatched;
 
   await store.saveUser(user);
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser });
 });
 
-// ── GET /api/user/transactions ────────────────────────────────────────────────
+// ── GET /api/user/transactions ───────────────────────────────────────────────
 router.get('/transactions', async (req, res) => {
   const myTx = await store.getUserTransactions(req.userId, 50);
   return res.json({ transactions: myTx });
@@ -68,6 +71,9 @@ router.post('/subscription', async (req, res) => {
       activatedAt: now,
       expiresAt:   now + 3 * 86400000,
     };
+    user.dailyEarnings = 0;
+    user.dailyEarningsDate = new Date(now).toISOString().slice(0, 10);
+    user.dailyClipsWatched = 0;
     await store.saveUser(user);
     const { passwordHash: _ph, ...safeUser } = user;
     return res.json({ user: safeUser });
@@ -91,6 +97,9 @@ router.post('/subscription', async (req, res) => {
   };
   user.totalEarned           = 0;
   user.lastEarningsProcessed = now;
+  user.dailyEarnings         = 0;
+  user.dailyEarningsDate     = new Date(now).toISOString().slice(0, 10);
+  user.dailyClipsWatched     = 0;
 
   await store.saveUser(user);
 
@@ -117,7 +126,7 @@ router.post('/subscription', async (req, res) => {
   return res.json({ user: safeUser });
 });
 
-// ── POST /api/user/earnings — credit trailer-watching earnings ──────────
+// ── POST /api/user/earnings — credit earnings for watching a trailer ─────────
 router.post('/earnings', async (req, res) => {
   const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -143,14 +152,13 @@ router.post('/earnings', async (req, res) => {
   const today = new Date(now).toISOString().slice(0, 10);
   const dailyCap = parseFloat((tier.price * tier.dailyROI).toFixed(4));
 
-  // Reset daily counters if we're on a new day
+  // Reset daily counters when the day changes
   if (user.dailyEarningsDate !== today) {
     user.dailyEarningsDate = today;
     user.dailyEarnings = 0;
     user.dailyClipsWatched = 0;
   }
 
-  // Hard limits: daily earnings and daily clip count
   const MAX_CLIPS_PER_DAY = 10;
 
   if ((user.dailyEarnings || 0) >= dailyCap) {
@@ -203,3 +211,43 @@ router.post('/earnings', async (req, res) => {
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser, credited });
 });
+
+// ── Internal: credit multi-level referral bonuses ─────────────────────────────
+const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
+
+async function creditReferralBonuses(newUser, amount, now) {
+  if (!newUser.referredBy) return;
+
+  const l1 = await store.findUserByReferralCode(newUser.referredBy);
+  if (!l1) return;
+  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
+
+  if (!l1.referredBy) return;
+  const l2 = await store.findUserByReferralCode(l1.referredBy);
+  if (!l2) return;
+  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
+
+  if (!l2.referredBy) return;
+  const l3 = await store.findUserByReferralCode(l2.referredBy);
+  if (!l3) return;
+  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
+}
+
+async function _creditBonus(user, bonus, now, note) {
+  user.wallet          = parseFloat(((user.wallet          || 0) + bonus).toFixed(4));
+  user.referralEarnings = parseFloat(((user.referralEarnings || 0) + bonus).toFixed(4));
+  await store.saveUser(user);
+  await store.saveTransaction({
+    id:        generateId(),
+    userId:    user.id,
+    username:  user.username,
+    email:     user.email,
+    type:      'referral_bonus',
+    amount:    parseFloat(bonus.toFixed(4)),
+    status:    'approved',
+    note,
+    createdAt: now,
+  });
+}
+
+module.exports = router;
