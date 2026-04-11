@@ -11,12 +11,12 @@ const API_BASE_URL = 'https://clipcash-kcif.onrender.com';
 
 // Direct Yoco payment links for each paid plan.
 const YOCO_PAYMENT_LINKS = {
-  starter:  'https://pay.yoco.com/r/7XbAwE',
-  bronze:   'https://pay.yoco.com/r/2Bp0ZN',
-  silver:   'https://pay.yoco.com/r/2wRJqj',
-  gold:     'https://pay.yoco.com/r/2D9vBp',
-  platinum: 'https://pay.yoco.com/r/2Bp0ZG',
-  diamond:  'https://pay.yoco.com/r/4GlxXL',
+  starter:  'https://pay.yoco.com/r/4WwMwR',
+  bronze:   'https://pay.yoco.com/r/78MLMM',
+  silver:   'https://pay.yoco.com/r/70bzVD',
+  gold:     'https://pay.yoco.com/r/2wRJg5',
+  platinum: 'https://pay.yoco.com/r/meg501',
+  diamond:  'https://pay.yoco.com/r/2Bp0Gr',
 };
 
 /**
