@@ -19,13 +19,12 @@ let timerSeconds      = 15;
 let timerRunning      = false;
 let currentUser       = null;
 
-// ── Init ──────────────────────────────────────────────────────────────────────
+// ── Init ────���─────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   currentUser = requireAuth();
   if (!currentUser) return;
 
   // Fetch fresh user data from backend to reflect any server-side updates
-  // (e.g. pending ROI credited on login, subscription changes).
   try {
     const data = await apiRequest('/api/user/me');
     currentUser = data.user;
@@ -102,7 +101,7 @@ function renderCapProgress() {
   }
 }
 
-// ── Account Lock ─────────────────────────────────────────────────────────────
+// ── Account Lock ───────────────────────────────────────────────────────────────
 function checkAccountLock() {
   const locked  = isAccountLocked(currentUser);
   const overlay = document.getElementById('lock-overlay');
@@ -257,9 +256,23 @@ async function onTrailerComplete() {
     }
   } catch (err) {
     // Optimistic local update so the UI isn't stuck if backend is temporarily unreachable
-    const creditedAmount = Math.min(earning, remaining);
+    const today = new Date().toISOString().slice(0, 10);
+    const dailyCap = tier ? parseFloat((tier.price * tier.dailyROI).toFixed(4)) : 0;
+
+    if (currentUser.dailyEarningsDate !== today) {
+      currentUser.dailyEarningsDate = today;
+      currentUser.dailyEarnings = 0;
+      currentUser.dailyClipsWatched = 0;
+    }
+
+    const dailyRemaining = Math.max(0, dailyCap - (currentUser.dailyEarnings || 0));
+    const creditedAmount = Math.min(earning, remaining, dailyRemaining);
+
     currentUser.wallet      = parseFloat(((currentUser.wallet || 0) + creditedAmount).toFixed(4));
     currentUser.totalEarned = parseFloat(((currentUser.totalEarned || 0) + creditedAmount).toFixed(4));
+    currentUser.dailyEarnings = parseFloat(((currentUser.dailyEarnings || 0) + creditedAmount).toFixed(4));
+    currentUser.dailyClipsWatched = (currentUser.dailyClipsWatched || 0) + 1;
+
     if (!currentUser.watchedTrailers) currentUser.watchedTrailers = [];
     if (!currentUser.watchedTrailers.includes(trailer.id)) currentUser.watchedTrailers.push(trailer.id);
     currentUser.lastEarningsProcessed = Date.now();
@@ -325,7 +338,7 @@ function typeLabel(type) {
   return map[type] || type;
 }
 
-// ── Referral Copy ─────────────────────────────────────────────────────────────
+// ── Referral Copy ───────────────────────────────────────────────────────────
 function copyReferralCode() {
   const code = currentUser?.referralCode;
   if (!code) return;
@@ -337,7 +350,7 @@ function copyReferralCode() {
   });
 }
 
-// ── DOM Helper ────────────────────────────────────────────────────────────────
+// ── DOM Helper ───────────────────────────────────────────────────────────────
 function setEl(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
