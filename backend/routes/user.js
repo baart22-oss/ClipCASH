@@ -117,7 +117,7 @@ router.post('/subscription', async (req, res) => {
   return res.json({ user: safeUser });
 });
 
-// ── POST /api/user/earnings — credit earnings for watching a trailer ──────────
+// ── POST /api/user/earnings — credit trailer-watching earnings ──────────
 router.post('/earnings', async (req, res) => {
   const user = await store.findUser(req.userId);
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -140,16 +140,46 @@ router.post('/earnings', async (req, res) => {
     return res.status(400).json({ error: 'Subscription expired' });
   }
 
-  const cap       = tier.maxEarnings;
-  const remaining = cap - (user.totalEarned || 0);
+  const today = new Date(now).toISOString().slice(0, 10);
+  const dailyCap = parseFloat((tier.price * tier.dailyROI).toFixed(4));
 
-  if (remaining <= 0) {
+  // Reset daily counters if we're on a new day
+  if (user.dailyEarningsDate !== today) {
+    user.dailyEarningsDate = today;
+    user.dailyEarnings = 0;
+    user.dailyClipsWatched = 0;
+  }
+
+  // Hard limits: daily earnings and daily clip count
+  const MAX_CLIPS_PER_DAY = 10;
+
+  if ((user.dailyEarnings || 0) >= dailyCap) {
+    return res.status(400).json({ error: 'Daily earnings cap reached' });
+  }
+
+  if ((user.dailyClipsWatched || 0) >= MAX_CLIPS_PER_DAY) {
+    return res.status(400).json({ error: 'Daily clip limit reached' });
+  }
+
+  const cap = tier.maxEarnings;
+  const totalRemaining = cap - (user.totalEarned || 0);
+
+  if (totalRemaining <= 0) {
     return res.status(400).json({ error: 'Earnings cap reached' });
   }
 
-  const credited = parseFloat(Math.min(amount, remaining).toFixed(4));
-  user.wallet      = parseFloat(((user.wallet      || 0) + credited).toFixed(4));
+  const dailyRemaining = dailyCap - (user.dailyEarnings || 0);
+  const creditable = Math.min(amount, dailyRemaining, totalRemaining);
+  const credited = parseFloat(creditable.toFixed(4));
+
+  if (credited <= 0) {
+    return res.status(400).json({ error: 'Daily earnings cap reached' });
+  }
+
+  user.wallet      = parseFloat(((user.wallet || 0) + credited).toFixed(4));
   user.totalEarned = parseFloat(((user.totalEarned || 0) + credited).toFixed(4));
+  user.dailyEarnings = parseFloat(((user.dailyEarnings || 0) + credited).toFixed(4));
+  user.dailyClipsWatched = (user.dailyClipsWatched || 0) + 1;
 
   if (trailerId && !user.watchedTrailers.includes(trailerId)) {
     user.watchedTrailers.push(trailerId);
@@ -173,43 +203,3 @@ router.post('/earnings', async (req, res) => {
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser, credited });
 });
-
-// ── Internal: credit multi-level referral bonuses ─────────────────────────────
-const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
-
-async function creditReferralBonuses(newUser, amount, now) {
-  if (!newUser.referredBy) return;
-
-  const l1 = await store.findUserByReferralCode(newUser.referredBy);
-  if (!l1) return;
-  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
-
-  if (!l1.referredBy) return;
-  const l2 = await store.findUserByReferralCode(l1.referredBy);
-  if (!l2) return;
-  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
-
-  if (!l2.referredBy) return;
-  const l3 = await store.findUserByReferralCode(l2.referredBy);
-  if (!l3) return;
-  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
-}
-
-async function _creditBonus(user, bonus, now, note) {
-  user.wallet          = parseFloat(((user.wallet          || 0) + bonus).toFixed(4));
-  user.referralEarnings = parseFloat(((user.referralEarnings || 0) + bonus).toFixed(4));
-  await store.saveUser(user);
-  await store.saveTransaction({
-    id:        generateId(),
-    userId:    user.id,
-    username:  user.username,
-    email:     user.email,
-    type:      'referral_bonus',
-    amount:    parseFloat(bonus.toFixed(4)),
-    status:    'approved',
-    note,
-    createdAt: now,
-  });
-}
-
-module.exports = router;
