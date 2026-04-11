@@ -9,8 +9,8 @@ const TRAILERS = [
   { id: 'dQw4w9WgXcQ', title: 'Never Gonna Give You Up',  genre: 'Music Video',  year: 1987 },
   { id: 'L_jWHffIx5E', title: 'Smells Like Teen Spirit',  genre: 'Music',        year: 1991 },
   { id: 'kJQP7kiw5Fk', title: 'Despacito',                genre: 'Pop',          year: 2017 },
-  { id: 'RgKAFK5djSk', title: 'See You Again',             genre: 'Drama / R&B', year: 2015 },
-  { id: 'JGwWNGJdvx8', title: 'Shape of You',              genre: 'Pop',          year: 2017 },
+  { id: 'RgKAFK5djSk', title: 'See You Again',            genre: 'Drama / R&B', year: 2015 },
+  { id: 'JGwWNGJdvx8', title: 'Shape of You',             genre: 'Pop',          year: 2017 },
 ];
 
 let currentTrailerIdx = 0;
@@ -19,12 +19,13 @@ let timerSeconds      = 15;
 let timerRunning      = false;
 let currentUser       = null;
 
-// ── Init ────���─────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   currentUser = requireAuth();
   if (!currentUser) return;
 
   // Fetch fresh user data from backend to reflect any server-side updates
+  // (e.g. pending ROI credited on login, subscription changes).
   try {
     const data = await apiRequest('/api/user/me');
     currentUser = data.user;
@@ -49,6 +50,20 @@ function renderDashboard() {
   setEl('stat-total-earned', formatZAR(currentUser.totalEarned));
   setEl('stat-daily',        formatZAR(calculateDailyEarnings(currentUser)));
   setEl('stat-sub',          (TIER_ICONS[tierKey] || '🎬') + ' ' + (SUBSCRIPTION_TIERS[tierKey]?.name || 'Free Intern'));
+
+  const dailyCap = getDailyEarningsCap(currentUser);
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyEarned = currentUser.dailyEarningsDate === today ? (currentUser.dailyEarnings || 0) : 0;
+  const dailyClips = currentUser.dailyEarningsDate === today ? (currentUser.dailyClipsWatched || 0) : 0;
+
+  const dailyEarnedEl = document.getElementById('stat-daily-earned');
+  if (dailyEarnedEl) dailyEarnedEl.textContent = formatZAR(dailyEarned);
+
+  const dailyCapEl = document.getElementById('stat-daily-cap');
+  if (dailyCapEl) dailyCapEl.textContent = dailyCap > 0 ? formatZAR(dailyCap) : 'N/A';
+
+  const dailyClipsEl = document.getElementById('stat-daily-clips');
+  if (dailyClipsEl) dailyClipsEl.textContent = String(dailyClips);
 
   renderSubCard();
   renderCapProgress();
@@ -208,18 +223,14 @@ async function onTrailerComplete() {
   const remaining = cap - (currentUser.totalEarned || 0);
 
   const today = new Date().toISOString().slice(0, 10);
-  const dailyCap = tier ? parseFloat((tier.price * tier.dailyROI).toFixed(4)) : 0;
-  const dailyEarnings = currentUser.dailyEarningsDate === today
-    ? (currentUser.dailyEarnings || 0)
-    : 0;
-  const dailyClipsWatched = currentUser.dailyEarningsDate === today
-    ? (currentUser.dailyClipsWatched || 0)
-    : 0;
+  const dailyCap = tier ? getDailyEarningsCap(currentUser) : 0;
+  const dailyEarnings = currentUser.dailyEarningsDate === today ? (currentUser.dailyEarnings || 0) : 0;
+  const dailyClipsWatched = currentUser.dailyEarningsDate === today ? (currentUser.dailyClipsWatched || 0) : 0;
 
-  if (earning <= 0 || remaining <= 0 || (dailyCap > 0 && dailyEarnings >= dailyCap) || dailyClipsWatched >= 10) {
+  if (earning <= 0 || remaining <= 0 || (dailyCap > 0 && dailyEarnings >= dailyCap) || dailyClipsWatched >= getDailyClipLimit(currentUser)) {
     if (cap === 0) showToast('Upgrade your plan to earn while watching!', 'info');
     else if (dailyCap > 0 && dailyEarnings >= dailyCap) showToast('Daily earnings cap reached. Come back tomorrow.', 'info');
-    else if (dailyClipsWatched >= 10) showToast('Daily clip limit reached. Come back tomorrow.', 'info');
+    else if (dailyClipsWatched >= getDailyClipLimit(currentUser)) showToast('Daily clip limit reached. Come back tomorrow.', 'info');
     else checkAccountLock();
 
     // Still mark as watched locally
@@ -257,7 +268,7 @@ async function onTrailerComplete() {
   } catch (err) {
     // Optimistic local update so the UI isn't stuck if backend is temporarily unreachable
     const today = new Date().toISOString().slice(0, 10);
-    const dailyCap = tier ? parseFloat((tier.price * tier.dailyROI).toFixed(4)) : 0;
+    const dailyCap = tier ? getDailyEarningsCap(currentUser) : 0;
 
     if (currentUser.dailyEarningsDate !== today) {
       currentUser.dailyEarningsDate = today;
