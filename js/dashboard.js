@@ -208,9 +208,20 @@ async function onTrailerComplete() {
   const cap       = tier?.maxEarnings || 0;
   const remaining = cap - (currentUser.totalEarned || 0);
 
-  if (earning <= 0 || remaining <= 0) {
+  const today = new Date().toISOString().slice(0, 10);
+  const dailyCap = tier ? parseFloat((tier.price * tier.dailyROI).toFixed(4)) : 0;
+  const dailyEarnings = currentUser.dailyEarningsDate === today
+    ? (currentUser.dailyEarnings || 0)
+    : 0;
+  const dailyClipsWatched = currentUser.dailyEarningsDate === today
+    ? (currentUser.dailyClipsWatched || 0)
+    : 0;
+
+  if (earning <= 0 || remaining <= 0 || (dailyCap > 0 && dailyEarnings >= dailyCap) || dailyClipsWatched >= 10) {
     if (cap === 0) showToast('Upgrade your plan to earn while watching!', 'info');
-    else           checkAccountLock();
+    else if (dailyCap > 0 && dailyEarnings >= dailyCap) showToast('Daily earnings cap reached. Come back tomorrow.', 'info');
+    else if (dailyClipsWatched >= 10) showToast('Daily clip limit reached. Come back tomorrow.', 'info');
+    else checkAccountLock();
 
     // Still mark as watched locally
     if (!currentUser.watchedTrailers) currentUser.watchedTrailers = [];
