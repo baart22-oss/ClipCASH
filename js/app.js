@@ -1,11 +1,3 @@
-const YOCO_PAYMENT_LINKS = {
-  starter:  'https://pay.yoco.com/r/7XbAwE',
-  bronze:   'https://pay.yoco.com/r/2Bp0ZN',
-  silver:   'https://pay.yoco.com/r/2wRJqj',
-  gold:     'https://pay.yoco.com/r/2D9vBp',
-  platinum: 'https://pay.yoco.com/r/2Bp0ZG',
-  diamond:  'https://pay.yoco.com/r/4GlxXL',
-};
 /* =============================================
    app.js – Shared utilities, constants, helpers
    ============================================= */
@@ -17,15 +9,20 @@ const YOCO_PAYMENT_LINKS = {
 // For local development you can override this to http://localhost:3000.
 const API_BASE_URL = 'https://clipcash-kcif.onrender.com';
 
+// Direct Yoco payment links for each paid plan.
+const YOCO_PAYMENT_LINKS = {
+  starter:  'https://pay.yoco.com/r/7XbAwE',
+  bronze:   'https://pay.yoco.com/r/2Bp0ZN',
+  silver:   'https://pay.yoco.com/r/2wRJqj',
+  gold:     'https://pay.yoco.com/r/2D9vBp',
+  platinum: 'https://pay.yoco.com/r/2Bp0ZG',
+  diamond:  'https://pay.yoco.com/r/4GlxXL',
+};
+
 /**
  * Make an authenticated request to the backend.
  * Attaches the admin JWT (sessionStorage) or user JWT (localStorage) as
- * Authorization: Bearer <token>.  Admin token takes priority.
- *
- * @param {string} path    - e.g. '/api/user/me'
- * @param {object} [opts]  - fetch options (method, body, headers, …)
- * @returns {Promise<any>} - parsed JSON response
- * @throws  {Error}         with message from the server on non-2xx responses
+ * Authorization: Bearer <token>. Admin token takes priority.
  */
 async function apiRequest(path, opts = {}) {
   const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
@@ -44,37 +41,45 @@ async function apiRequest(path, opts = {}) {
   });
 
   let data;
-  try { data = await response.json(); } catch { data = {}; }
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
 
   if (!response.ok) {
-    throw Object.assign(new Error(data.error || `HTTP ${response.status}`), { status: response.status, data });
+    throw Object.assign(new Error(data.error || `HTTP ${response.status}`), {
+      status: response.status,
+      data,
+    });
   }
+
   return data;
 }
 
-// ── Admin Session Token (sessionStorage — cleared on tab/browser close) ──────
+// ── Admin Session Token (sessionStorage) ─────────────────────────────────────
 const LS_ADMIN_TOKEN = 'clipcash_admin_token';
 
 function getAdminToken()      { return sessionStorage.getItem(LS_ADMIN_TOKEN) || null; }
 function setAdminToken(token) { sessionStorage.setItem(LS_ADMIN_TOKEN, token); }
 function clearAdminToken()    { sessionStorage.removeItem(LS_ADMIN_TOKEN); }
 
-// ── User JWT (localStorage — persists across tabs and browser restarts) ───────
+// ── User JWT (localStorage) ───────────────────────────────────────────────────
 const LS_USER_TOKEN = 'clipcash_user_token';
 
-function getUserToken()       { return localStorage.getItem(LS_USER_TOKEN) || null; }
-function setUserToken(token)  { localStorage.setItem(LS_USER_TOKEN, token); }
-function clearUserToken()     { localStorage.removeItem(LS_USER_TOKEN); }
+function getUserToken()      { return localStorage.getItem(LS_USER_TOKEN) || null; }
+function setUserToken(token) { localStorage.setItem(LS_USER_TOKEN, token); }
+function clearUserToken()    { localStorage.removeItem(LS_USER_TOKEN); }
 
-// ── Subscription Tiers ──────────────────────────────────────────────────────
+// ── Subscription Tiers ───────────────────────────────────────────────────────
 const SUBSCRIPTION_TIERS = {
-  free_intern: { name: 'Free Intern',  price: 0,     dailyROI: 0,    durationDays: 3,  maxEarnings: 0     },
-  starter:     { name: 'Starter',      price: 100,   dailyROI: 0.05, durationDays: 30, maxEarnings: 200   },
-  bronze:      { name: 'Bronze',       price: 500,   dailyROI: 0.05, durationDays: 30, maxEarnings: 1000  },
-  silver:      { name: 'Silver',       price: 1000,  dailyROI: 0.05, durationDays: 30, maxEarnings: 2000  },
-  gold:        { name: 'Gold',         price: 5000,  dailyROI: 0.05, durationDays: 30, maxEarnings: 10000 },
-  platinum:    { name: 'Platinum',     price: 10000, dailyROI: 0.05, durationDays: 30, maxEarnings: 20000 },
-  diamond:     { name: 'Diamond',      price: 20000, dailyROI: 0.05, durationDays: 30, maxEarnings: 40000 },
+  free_intern: { name: 'Free Intern', price: 0, dailyROI: 0, durationDays: 3, maxEarnings: 0 },
+  starter:     { name: 'Starter',     price: 100, dailyROI: 0.05, durationDays: 30, maxEarnings: 200 },
+  bronze:      { name: 'Bronze',      price: 500, dailyROI: 0.05, durationDays: 30, maxEarnings: 1000 },
+  silver:      { name: 'Silver',      price: 1000, dailyROI: 0.05, durationDays: 30, maxEarnings: 2000 },
+  gold:        { name: 'Gold',        price: 5000, dailyROI: 0.05, durationDays: 30, maxEarnings: 10000 },
+  platinum:    { name: 'Platinum',    price: 10000, dailyROI: 0.05, durationDays: 30, maxEarnings: 20000 },
+  diamond:     { name: 'Diamond',     price: 20000, dailyROI: 0.05, durationDays: 30, maxEarnings: 40000 },
 };
 
 const TIER_ICONS = {
@@ -85,17 +90,6 @@ const TIER_ICONS = {
   gold:        '🥇',
   platinum:    '💎',
   diamond:     '👑',
-};
-
-// Direct Yoco payment links for each paid plan.
-// These are pre-created payment links from the Yoco dashboard.
-const YOCO_PAYMENT_LINKS = {
-  starter:  'https://pay.yoco.com/r/7XbAwE',
-  bronze:   'https://pay.yoco.com/r/2Bp0ZN',
-  silver:   'https://pay.yoco.com/r/2wRJqj',
-  gold:     'https://pay.yoco.com/r/2D9vBp',
-  platinum: 'https://pay.yoco.com/r/2Bp0ZG',
-  diamond:  'https://pay.yoco.com/r/4GlxXL',
 };
 
 const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
@@ -115,7 +109,13 @@ function formatDate(ts) {
 function formatDateTime(ts) {
   if (!ts) return '—';
   const d = new Date(ts);
-  return d.toLocaleDateString('en-ZA', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('en-ZA', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function timeAgo(ts) {
@@ -123,8 +123,8 @@ function timeAgo(ts) {
   const mins  = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days  = Math.floor(diff / 86400000);
-  if (mins  < 1)  return 'just now';
-  if (mins  < 60) return mins  + 'm ago';
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
   if (hours < 24) return hours + 'h ago';
   return days + 'd ago';
 }
@@ -138,25 +138,25 @@ function generateId() {
   return 'cc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
 }
 
-// ── Current User Cache (localStorage) ───────────────────────────────────────
-// The user object is fetched from the backend on login/register and cached here
-// for synchronous rendering.  Always re-fetch from GET /api/user/me after
-// mutations to keep this cache up to date.
+// ── Current User Cache ───────────────────────────────────────────────────────
 const LS_USER_KEY = 'clipcash_user';
 
 function getCurrentUser()   { return JSON.parse(localStorage.getItem(LS_USER_KEY) || 'null'); }
 function saveCurrentUser(u) { localStorage.setItem(LS_USER_KEY, JSON.stringify(u)); }
 function clearCurrentUser() { localStorage.removeItem(LS_USER_KEY); }
 
-// ── Auth Guards ──────────────────────────────────────────────────────────────
+// ── Auth Guards ──────────────────────────────────────────────────���────────────
 function requireAuth() {
   const token = getUserToken();
   const user  = getCurrentUser();
-  if (!token || !user) { window.location.href = 'login.html'; return null; }
+  if (!token || !user) {
+    window.location.href = 'login.html';
+    return null;
+  }
   return user;
 }
 
-// ── Earnings Logic (display helpers — no localStorage writes) ────────────────
+// ── Earnings Logic ───────────────────────────────────────────────────────────
 function getActiveTier(user) {
   if (!user.subscription || !user.subscription.tier) return null;
   const tier = SUBSCRIPTION_TIERS[user.subscription.tier];
@@ -207,7 +207,7 @@ function showToast(message, type = 'success', duration = 4000) {
   setTimeout(() => toast.remove(), duration);
 }
 
-// ── Navigation Helpers ────────────────────────────────────────────────────────
+// ── Navigation Helpers ───────────────────────────────────────────────────────
 function renderNav() {
   const nav = document.getElementById('main-nav');
   if (!nav) return;
@@ -230,7 +230,6 @@ function renderNav() {
 
   nav.innerHTML = links;
 
-  // Mobile nav
   const mobileNav = document.getElementById('mobile-nav');
   if (mobileNav) {
     let mobileLinks = `
@@ -250,7 +249,6 @@ function renderNav() {
     mobileNav.innerHTML = mobileLinks;
   }
 
-  // Active link highlight
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   document.querySelectorAll('#main-nav a, #mobile-nav a').forEach(a => {
     const href = a.getAttribute('href') || '';
@@ -273,15 +271,13 @@ function handleLogout(e) {
   window.location.href = 'index.html';
 }
 
-// ── Init on every page ────────────────────────────────────────────────────────
+// ── Init on every page ───────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   renderNav();
 
-  // Mobile toggle
   const toggle = document.getElementById('nav-toggle');
   if (toggle) toggle.addEventListener('click', toggleMobileNav);
 
-  // Close mobile nav on outside click
   document.addEventListener('click', e => {
     const mNav = document.getElementById('mobile-nav');
     const tog  = document.getElementById('nav-toggle');
