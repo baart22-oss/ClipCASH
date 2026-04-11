@@ -86,6 +86,7 @@ router.post('/register', async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const now = Date.now();
+  const today = new Date(now).toISOString().slice(0, 10);
 
   const newUser = {
     id:                    generateId(),
@@ -106,6 +107,9 @@ router.post('/register', async (req, res) => {
     createdAt:             now,
     lastEarningsProcessed: now,
     watchedTrailers:       [],
+    dailyEarnings:         0,
+    dailyEarningsDate:     today,
+    dailyClipsWatched:     0,
   };
 
   await store.saveUser(newUser);
@@ -155,25 +159,54 @@ async function processPendingEarnings(user) {
   const now = Date.now();
   if (user.subscription.expiresAt && now > user.subscription.expiresAt) return;
 
+  const today = new Date(now).toISOString().slice(0, 10);
+  const dailyCap = parseFloat((tier.price * tier.dailyROI).toFixed(4));
+
+  // Reset daily counters if new day
+  if (user.dailyEarningsDate !== today) {
+    user.dailyEarningsDate = today;
+    user.dailyEarnings = 0;
+    user.dailyClipsWatched = 0;
+  }
+
   const lastTs    = user.lastEarningsProcessed || user.createdAt || now;
   const daysSince = Math.floor((now - lastTs) / 86400000);
   if (daysSince < 1) return;
 
-  const dailyAmt = tier.price * tier.dailyROI;
   const cap      = tier.maxEarnings;
 
   for (let i = 0; i < daysSince; i++) {
     if ((user.totalEarned || 0) >= cap) break;
-    const credit   = Math.min(dailyAmt, cap - (user.totalEarned || 0));
+    if ((user.dailyEarnings || 0) >= dailyCap) break;
+
+    const remainingTotal = cap - (user.totalEarned || 0);
+    const remainingDaily  = dailyCap - (user.dailyEarnings || 0);
+    const credit = Math.min(tier.price * tier.dailyROI, remainingTotal, remainingDaily);
+
+    if (credit <= 0) break;
+
     user.totalEarned = parseFloat(((user.totalEarned || 0) + credit).toFixed(4));
     user.wallet      = parseFloat(((user.wallet      || 0) + credit).toFixed(4));
+    user.dailyEarnings = parseFloat(((user.dailyEarnings || 0) + credit).toFixed(4));
+
+    await store.saveTransaction({
+      id:        generateId(),
+      userId:    user.id,
+      username:  user.username,
+      email:     user.email,
+      type:      'daily_roi',
+      amount:    parseFloat(credit.toFixed(4)),
+      status:    'approved',
+      note:      'Daily ROI credit',
+      createdAt: now,
+    });
   }
 
   user.lastEarningsProcessed = now;
   await store.saveUser(user);
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
+// ���─ Utility ───────────────────────────────────────────────────────────────────
 function generateReferralCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
