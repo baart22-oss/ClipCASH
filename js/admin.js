@@ -31,8 +31,6 @@ async function initAdminPage() {
   document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => switchAdminTab(btn.dataset.tab));
   });
-
-  document.getElementById('demo-data-btn')?.addEventListener('click', seedAdminDemoData);
 }
 
 function showLoginModal() {
@@ -332,26 +330,6 @@ async function renderUsers() {
     }).join('');
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Error loading users: ${err.message}</td></tr>`;
-  }
-}
-
-async function seedAdminDemoData() {
-  try {
-    const users     = getUsers();
-    const adminData = getAdminData();
-    await apiRequest('/api/admin/sync', {
-      method: 'POST',
-      body: {
-        users,
-        withdrawals:  adminData.withdrawals,
-        transactions: adminData.transactions,
-      },
-    });
-    renderAdminStats();
-    switchAdminTab('withdrawals');
-    showToast('Demo data synced to backend! 🎉', 'success');
-  } catch (err) {
-    showToast('Sync failed: ' + err.message, 'error');
   }
 }
 
