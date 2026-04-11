@@ -71,7 +71,7 @@ function getUserToken()      { return localStorage.getItem(LS_USER_TOKEN) || nul
 function setUserToken(token) { localStorage.setItem(LS_USER_TOKEN, token); }
 function clearUserToken()    { localStorage.removeItem(LS_USER_TOKEN); }
 
-// ── Subscription Tiers ───────────────────────────────────────────────────────
+// ── Subscription Tiers ────────────────────────────────────────────────���──────
 const SUBSCRIPTION_TIERS = {
   free_intern: { name: 'Free Intern', price: 0, dailyROI: 0, durationDays: 3, maxEarnings: 0 },
   starter:     { name: 'Starter',     price: 100, dailyROI: 0.05, durationDays: 30, maxEarnings: 200 },
@@ -145,7 +145,7 @@ function getCurrentUser()   { return JSON.parse(localStorage.getItem(LS_USER_KEY
 function saveCurrentUser(u) { localStorage.setItem(LS_USER_KEY, JSON.stringify(u)); }
 function clearCurrentUser() { localStorage.removeItem(LS_USER_KEY); }
 
-// ── Auth Guards ──────────────────────────────────────────────────���────────────
+// ── Auth Guards ───────────────────────────────────────────────────────────────
 function requireAuth() {
   const token = getUserToken();
   const user  = getCurrentUser();
@@ -184,6 +184,16 @@ function calculatePerTrailerEarning(user) {
   const tier = getActiveTier(user);
   if (!tier || tier.dailyROI === 0) return 0;
   return parseFloat(((tier.price * tier.dailyROI) / 10).toFixed(4));
+}
+
+function getDailyEarningsCap(user) {
+  const tier = getActiveTier(user);
+  if (!tier || tier.dailyROI === 0) return 0;
+  return parseFloat((tier.price * tier.dailyROI).toFixed(4));
+}
+
+function getDailyClipLimit(_user) {
+  return 10;
 }
 
 // ── Toast Notifications ───────────────────────────────────────────────────────
@@ -271,7 +281,7 @@ function handleLogout(e) {
   window.location.href = 'index.html';
 }
 
-// ── Init on every page ───────────────────────────────────────────────────────
+// ── Init on every page ───────────────────────���───────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   renderNav();
 
