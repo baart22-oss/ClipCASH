@@ -194,51 +194,74 @@ async function rejectWithdrawal(id) {
 }
 
 // ── Transactions Table ────────────────────────────────────────────────────────
+let _allDeposits = []; // cache for client-side email filter
+
 async function renderTransactions() {
   const tbody = document.getElementById('transactions-tbody');
   if (!tbody) return;
   tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>`;
 
+  // Reset filter input when refreshing
+  const filterInput = document.getElementById('tx-email-filter');
+  if (filterInput) filterInput.value = '';
+
   try {
     const data    = await apiRequest('/api/admin/transactions');
-    const deposits = [...(data.transactions || [])]
+    _allDeposits  = [...(data.transactions || [])]
       .filter(t => t.type === 'deposit')
       .sort((a, b) => b.createdAt - a.createdAt);
 
-    if (deposits.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">No deposit transactions yet.</td></tr>`;
-      return;
-    }
-
-    tbody.innerHTML = deposits.map(t => `
-      <tr id="trow-${t.id}">
-        <td data-label="User">
-          <div class="user-cell">
-            <div class="user-avatar">${(t.username || 'U')[0].toUpperCase()}</div>
-            <div>
-              <div class="user-name">${t.username || '—'}</div>
-              <div class="user-email">${t.email    || '—'}</div>
-            </div>
-          </div>
-        </td>
-        <td data-label="Plan">${TIER_ICONS[t.tier] || '&#x1F3AC;'} ${t.tierName || t.note || '—'}</td>
-        <td data-label="Amount">${formatZAR(t.amount)}</td>
-        <td data-label="Method">${t.method === 'yoco' ? '&#x1F4B3; Yoco' : '&#x1F45B; Wallet'}</td>
-        <td data-label="Date">${formatDateTime(t.createdAt)}</td>
-        <td data-label="Status"><span class="badge badge-${t.status}"><span class="badge-dot"></span>${t.status}</span></td>
-        <td data-label="Actions">
-          ${t.status === 'pending' ? `
-            <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-              <button class="btn btn-success btn-sm" onclick="verifyTransaction('${t.id}')">&#x2705; Verify</button>
-              <button class="btn btn-danger btn-sm"  onclick="rejectTransaction('${t.id}')">&#x2717; Reject</button>
-            </div>
-          ` : `<span class="text-muted" style="font-size:.8rem">—</span>`}
-        </td>
-      </tr>
-    `).join('');
+    renderTransactionRows(_allDeposits);
   } catch (err) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Error loading transactions: ${err.message}</td></tr>`;
   }
+}
+
+function filterTransactions() {
+  const q = (document.getElementById('tx-email-filter')?.value || '').toLowerCase().trim();
+  const filtered = q
+    ? _allDeposits.filter(t =>
+        (t.email    || '').toLowerCase().includes(q) ||
+        (t.username || '').toLowerCase().includes(q))
+    : _allDeposits;
+  renderTransactionRows(filtered);
+}
+
+function renderTransactionRows(deposits) {
+  const tbody = document.getElementById('transactions-tbody');
+  if (!tbody) return;
+
+  if (deposits.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">No deposit transactions yet.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = deposits.map(t => `
+    <tr id="trow-${t.id}">
+      <td data-label="User">
+        <div class="user-cell">
+          <div class="user-avatar">${(t.username || 'U')[0].toUpperCase()}</div>
+          <div>
+            <div class="user-name">${t.username || '—'}</div>
+            <div class="user-email">${t.email    || '—'}</div>
+          </div>
+        </div>
+      </td>
+      <td data-label="Plan">${TIER_ICONS[t.tier] || '&#x1F3AC;'} ${t.tierName || t.note || '—'}</td>
+      <td data-label="Amount">${formatZAR(t.amount)}</td>
+      <td data-label="Method">${t.method === 'yoco' ? '&#x1F4B3; Yoco' : '&#x1F45B; Wallet'}</td>
+      <td data-label="Date">${formatDateTime(t.createdAt)}</td>
+      <td data-label="Status"><span class="badge badge-${t.status}"><span class="badge-dot"></span>${t.status}</span></td>
+      <td data-label="Actions">
+        ${t.status === 'pending' ? `
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="btn btn-success btn-sm" onclick="verifyTransaction('${t.id}')">&#x2705; Verify</button>
+            <button class="btn btn-danger btn-sm"  onclick="rejectTransaction('${t.id}')">&#x2717; Reject</button>
+          </div>
+        ` : `<span class="text-muted" style="font-size:.8rem">—</span>`}
+      </td>
+    </tr>
+  `).join('');
 }
 
 async function verifyTransaction(id) {

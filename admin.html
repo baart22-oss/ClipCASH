@@ -135,11 +135,14 @@
     <div class="tab-panel" id="tab-transactions">
       <div class="section-actions">
         <h2>Deposit Transactions</h2>
-        <button class="btn btn-secondary btn-sm" onclick="renderTransactions()">🔄 Refresh</button>
+        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+          <input type="text" id="tx-email-filter" class="form-input" placeholder="🔍 Filter by email or username…" style="width:240px" oninput="filterTransactions()" aria-label="Filter transactions by email or username">
+          <button class="btn btn-secondary btn-sm" onclick="renderTransactions()">🔄 Refresh</button>
+        </div>
       </div>
       <div class="alert alert-info" style="margin-bottom:1rem">
         <span class="alert-icon">ℹ️</span>
-        <div>Verify Yoco payments after confirming receipt. This activates the user's subscription.</div>
+        <div>Verify Yoco payments after confirming receipt in your Yoco dashboard. Match the payment to the user email shown below, then click <strong>Verify</strong> to activate their subscription.</div>
       </div>
       <div class="table-wrap">
         <div class="table-scroll">

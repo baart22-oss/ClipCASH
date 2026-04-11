@@ -158,6 +158,10 @@ function selectAndPay(key) {
   if (mPrice) mPrice.textContent = formatZAR(tier.price);
   if (mIcon)  mIcon.textContent  = TIER_ICONS[key] || '🎬';
 
+  // Show the user's email in the Yoco payment reference hint
+  const refEmailEl = document.getElementById('yoco-ref-email');
+  if (refEmailEl) refEmailEl.textContent = currentUser.email || '';
+
   renderWalletBalance();
   const walletBal = currentUser.wallet || 0;
   const walletBtn = document.getElementById('pay-wallet-btn');
@@ -224,16 +228,20 @@ async function payWithWallet() {
 
 async function payWithYoco() {
   if (!selectedTierKey) return;
-  const tier = SUBSCRIPTION_TIERS[selectedTierKey];
+  const tier    = SUBSCRIPTION_TIERS[selectedTierKey];
+  const yocoUrl = YOCO_PAYMENT_LINKS[selectedTierKey];
+
+  if (!yocoUrl) {
+    showToast('Payment link not configured for this plan.', 'error');
+    return;
+  }
 
   const btn = document.getElementById('pay-yoco-btn');
   if (btn) btn.disabled = true;
 
+  // Record pending transaction in backend so admin can verify against user email.
+  // Non-fatal if this fails — the user can still proceed to pay via Yoco.
   try {
-    // Create a pending deposit transaction on the backend.
-    // The transaction stays pending until the Yoco webhook fires (payment.succeeded)
-    // or an admin verifies it via the admin panel.
-    // userId is derived from the JWT on the backend — not sent by the client.
     await apiRequest('/api/deposit/initiate', {
       method: 'POST',
       body: {
@@ -243,14 +251,21 @@ async function payWithYoco() {
         method:   'yoco',
       },
     });
-
-    closeModal();
-    showToast(`💳 Yoco payment initiated for ${tier.name}. Admin will verify shortly.`, 'info', 6000);
-  } catch (err) {
-    showToast('Failed to initiate payment: ' + err.message, 'error');
-  } finally {
-    if (btn) btn.disabled = false;
+  } catch (_err) {
+    // proceed regardless
   }
+
+  closeModal();
+  const email = currentUser.email || '';
+  const safeEmail = email.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  showToast(
+    `💳 Opening Yoco payment. Please use <strong>${safeEmail}</strong> as your payment reference so we can verify your subscription.`,
+    'info',
+    8000
+  );
+  window.open(yocoUrl, '_blank');
+
+  if (btn) btn.disabled = false;
 }
 
 // ── DOM Helper ────────────────────────────────────────────────────────────────
