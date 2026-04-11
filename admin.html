@@ -130,7 +130,16 @@
         </div>
       </div>
     </div>
-
+<div class="form-group" style="margin-bottom:1rem">
+  <label class="form-label" for="tx-email-filter">Filter by email or username</label>
+  <input
+    type="text"
+    id="tx-email-filter"
+    class="form-input"
+    placeholder="Search pending payments..."
+    oninput="filterTransactions()"
+  >
+</div>
     <!-- TAB: Transactions -->
     <div class="tab-panel" id="tab-transactions">
       <div class="section-actions">
