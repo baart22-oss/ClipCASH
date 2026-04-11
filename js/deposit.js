@@ -24,7 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   document.getElementById('pay-wallet-btn')?.addEventListener('click', payWithWallet);
   document.getElementById('pay-yoco-btn')  ?.addEventListener('click', payWithYoco);
-  document.getElementById('modal-close')   ?.addEventListener('click', closeModal);
+  document.getElementById('modal-close')    ?.addEventListener('click', closeModal);
   document.getElementById('modal-backdrop')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
   });
@@ -158,7 +158,6 @@ function selectAndPay(key) {
   if (mPrice) mPrice.textContent = formatZAR(tier.price);
   if (mIcon)  mIcon.textContent  = TIER_ICONS[key] || '🎬';
 
-  // Show the user's email in the Yoco payment reference hint
   const refEmailEl = document.getElementById('yoco-ref-email');
   if (refEmailEl) refEmailEl.textContent = currentUser.email || '';
 
@@ -228,8 +227,8 @@ async function payWithWallet() {
 
 async function payWithYoco() {
   if (!selectedTierKey) return;
-  const tier    = SUBSCRIPTION_TIERS[selectedTierKey];
-  const yocoUrl = YOCO_PAYMENT_LINKS[selectedTierKey];
+  const tier = SUBSCRIPTION_TIERS[selectedTierKey];
+  const yocoUrl = YOCO_PAYMENT_LINKS?.[selectedTierKey];
 
   if (!yocoUrl) {
     showToast('Payment link not configured for this plan.', 'error');
@@ -239,31 +238,31 @@ async function payWithYoco() {
   const btn = document.getElementById('pay-yoco-btn');
   if (btn) btn.disabled = true;
 
-  // Record pending transaction in backend so admin can verify against user email.
-  // Non-fatal if this fails — the user can still proceed to pay via Yoco.
+  // Optional: store a pending record for manual admin review
   try {
     await apiRequest('/api/deposit/initiate', {
       method: 'POST',
       body: {
-        tier:     selectedTierKey,
+        tier: selectedTierKey,
         tierName: tier.name,
-        amount:   tier.price,
-        method:   'yoco',
+        amount: tier.price,
+        method: 'yoco',
+        email: currentUser.email || '',
       },
     });
   } catch (_err) {
-    // proceed regardless
+    // continue even if backend record fails
   }
 
   closeModal();
-  const email = currentUser.email || '';
-  const safeEmail = email.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
   showToast(
-    `💳 Opening Yoco payment. Please use <strong>${safeEmail}</strong> as your payment reference so we can verify your subscription.`,
+    `Opening Yoco payment for ${tier.name}. Please use ${currentUser.email || 'your email'} as the payment reference for admin verification.`,
     'info',
     8000
   );
-  window.open(yocoUrl, '_blank');
+
+  window.location.href = yocoUrl;
 
   if (btn) btn.disabled = false;
 }
