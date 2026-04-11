@@ -13,7 +13,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const router  = express.Router();
 
-const { store } = require('./store');
+const { store, SUBSCRIPTION_TIERS } = require('./store');
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -100,9 +100,20 @@ router.post('/verify-transaction', async (req, res) => {
   if (action === 'approve') {
     const user = await store.findUser(tx.userId);
     if (user) {
+      const tier = SUBSCRIPTION_TIERS[tx.tier];
+      const now   = Date.now();
+
+      user.subscription = {
+        tier: tx.tier,
+        activatedAt: now,
+        expiresAt: tier ? now + tier.durationDays * 86400000 : null,
+      };
+
+      // Optional compatibility fields for older code paths
       user.subscriptionActive = true;
       user.subscriptionTier   = tx.tier;
-      user.subscriptionStart  = new Date().toISOString();
+      user.subscriptionStart  = new Date(now).toISOString();
+
       await store.saveUser(user);
     }
   }
