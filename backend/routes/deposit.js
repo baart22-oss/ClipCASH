@@ -9,10 +9,6 @@
  *   The transaction stays pending until either:
  *     - The Yoco webhook (payment.succeeded) auto-confirms it, or
  *     - An admin manually verifies it via POST /api/admin/verify-transaction.
- *
- * Environment variables required for Yoco live checkout:
- *   YOCO_SECRET_KEY  – your Yoco secret key (from Yoco dashboard)
- *   YOCO_PUBLIC_KEY  – your Yoco publishable key (optional, for display)
  */
 
 const express = require('express');
@@ -23,7 +19,6 @@ const { store, generateId } = require('./store');
 
 // ── POST /api/deposit/initiate ──────────────────────────────────────────────
 router.post('/initiate', requireUserJWT, async (req, res) => {
-  // userId comes from the verified JWT, not the request body
   const userId   = req.userId;
   const user     = await store.findUser(userId);
   const username = user ? user.username : '';
