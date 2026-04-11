@@ -1,3 +1,11 @@
+const YOCO_PAYMENT_LINKS = {
+  starter:  'https://pay.yoco.com/r/7XbAwE',
+  bronze:   'https://pay.yoco.com/r/2Bp0ZN',
+  silver:   'https://pay.yoco.com/r/2wRJqj',
+  gold:     'https://pay.yoco.com/r/2D9vBp',
+  platinum: 'https://pay.yoco.com/r/2Bp0ZG',
+  diamond:  'https://pay.yoco.com/r/4GlxXL',
+};
 /* =============================================
    app.js – Shared utilities, constants, helpers
    ============================================= */
