@@ -54,6 +54,9 @@ function rowToUser(r) {
     createdAt:             Number(r.created_at),
     lastEarningsProcessed: r.last_earnings_processed !== null && r.last_earnings_processed !== undefined ? Number(r.last_earnings_processed) : null,
     watchedTrailers:       r.watched_trailers || [],
+    dailyEarnings:         r.daily_earnings !== null && r.daily_earnings !== undefined ? parseFloat(r.daily_earnings) : 0,
+    dailyEarningsDate:     r.daily_earnings_date || null,
+    dailyClipsWatched:     r.daily_clips_watched !== null && r.daily_clips_watched !== undefined ? Number(r.daily_clips_watched) : 0,
   };
 }
 
@@ -113,7 +116,10 @@ async function migrate() {
       subscription            JSONB,
       created_at              BIGINT NOT NULL,
       last_earnings_processed BIGINT,
-      watched_trailers        TEXT[] NOT NULL DEFAULT '{}'
+      watched_trailers        TEXT[] NOT NULL DEFAULT '{}',
+      daily_earnings          NUMERIC(14,4) NOT NULL DEFAULT 0,
+      daily_earnings_date     TEXT,
+      daily_clips_watched     INT NOT NULL DEFAULT 0
     )
   `);
 
@@ -154,10 +160,15 @@ async function migrate() {
     )
   `);
 
+  // Backfill columns for existing databases
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_earnings NUMERIC(14,4) NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_earnings_date TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_clips_watched INT NOT NULL DEFAULT 0`);
+
   console.log('[DB] Tables migrated successfully');
 }
 
-// ── User queries ──────────────────────────────────────────────────────────────
+// ── User queries ─────────────────────────────────────────────────────────────
 async function getUsers() {
   const { rows } = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
   return rows.map(rowToUser);
@@ -188,8 +199,9 @@ async function saveUser(user) {
     INSERT INTO users
       (id, username, email, password_hash, is_admin, wallet, total_earned,
        referral_code, referred_by, referral_earnings, subscription,
-       created_at, last_earnings_processed, watched_trailers)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       created_at, last_earnings_processed, watched_trailers,
+       daily_earnings, daily_earnings_date, daily_clips_watched)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
     ON CONFLICT (id) DO UPDATE SET
       username                = EXCLUDED.username,
       email                   = EXCLUDED.email,
@@ -203,7 +215,10 @@ async function saveUser(user) {
       subscription            = EXCLUDED.subscription,
       created_at              = EXCLUDED.created_at,
       last_earnings_processed = EXCLUDED.last_earnings_processed,
-      watched_trailers        = EXCLUDED.watched_trailers
+      watched_trailers        = EXCLUDED.watched_trailers,
+      daily_earnings          = EXCLUDED.daily_earnings,
+      daily_earnings_date     = EXCLUDED.daily_earnings_date,
+      daily_clips_watched     = EXCLUDED.daily_clips_watched
   `, [
     user.id,
     user.username,
@@ -219,6 +234,9 @@ async function saveUser(user) {
     user.createdAt,
     user.lastEarningsProcessed || null,
     user.watchedTrailers || [],
+    user.dailyEarnings || 0,
+    user.dailyEarningsDate || null,
+    user.dailyClipsWatched || 0,
   ]);
   return user;
 }
@@ -271,7 +289,7 @@ async function saveTransaction(tx) {
   return tx;
 }
 
-// ── Withdrawal queries ────────────────────────────────────────────────────────
+// ── Withdrawal queries ───────────────────────────────────────────────────────
 async function getWithdrawals() {
   const { rows } = await pool.query('SELECT * FROM withdrawals ORDER BY created_at DESC');
   return rows.map(rowToWithdrawal);
