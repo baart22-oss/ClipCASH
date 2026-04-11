@@ -4,7 +4,6 @@
 
 'use strict';
 
-// ─────────────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   initAdminPage();
 });
@@ -82,7 +81,6 @@ async function handleAdminLogin(e) {
         : 'Login failed: ' + err.message;
       errorEl.classList.add('show');
     }
-    // Re-attach listener for retry
     const form = document.getElementById('admin-login-form');
     if (form) form.addEventListener('submit', handleAdminLogin, { once: true });
   } finally {
@@ -339,13 +337,13 @@ async function seedAdminDemoData() {
     });
     renderAdminStats();
     switchAdminTab('withdrawals');
-    showToast('Demo data synced to backend! &#x1F389;', 'success');
+    showToast('Demo data synced to backend! 🎉', 'success');
   } catch (err) {
     showToast('Sync failed: ' + err.message, 'error');
   }
 }
 
-// ── DOM Helper ────────────────────────────────────────────────────────────────
+// ── DOM Helper ───────────────────────────────────────────────────────────���────
 function setEl(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
