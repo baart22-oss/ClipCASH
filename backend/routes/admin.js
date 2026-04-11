@@ -13,20 +13,16 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const router  = express.Router();
 
-const { store, generateId } = require('./store');
+const { store } = require('./store');
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const JWT_SECRET     = process.env.JWT_SECRET     || 'clipcash-dev-jwt-secret-change-in-production';
 const JWT_ADMIN_TTL  = '4h';
 
-// Lazily-hashed admin password — bcrypt.hash is called once on first login attempt
-// and the result is cached for the lifetime of the process.
 let cachedAdminHash = null;
 
 // ── POST /api/admin/login ──────────────────────────────────────────────────────
-// Issues a JWT after verifying the admin username and password.
-// Does NOT require an existing admin token — this is the auth entry point.
 router.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
 
@@ -40,13 +36,10 @@ router.post('/login', async (req, res) => {
     });
   }
 
-  // Hash the configured password on first login, then cache it.
   if (!cachedAdminHash) {
     cachedAdminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
   }
 
-  // Always run bcrypt.compare regardless of whether the username matches to
-  // prevent timing-based username enumeration.
   const passwordValid = await bcrypt.compare(password, cachedAdminHash);
   if (!passwordValid || username !== ADMIN_USERNAME) {
     return res.status(401).json({ error: 'Invalid username or password' });
@@ -86,7 +79,7 @@ router.get('/stats', async (_req, res) => {
 
 // ── POST /api/admin/verify-transaction ────────────────────────────────────────
 router.post('/verify-transaction', async (req, res) => {
-  const { transactionId, action } = req.body;
+  const { transactionId, action } = req.body || {};
   if (!transactionId || !action) {
     return res.status(400).json({ error: 'transactionId and action are required' });
   }
@@ -95,7 +88,7 @@ router.post('/verify-transaction', async (req, res) => {
   }
 
   const tx = await store.findTransaction(transactionId);
-  if (!tx)                     return res.status(404).json({ error: 'Transaction not found' });
+  if (!tx) return res.status(404).json({ error: 'Transaction not found' });
   if (tx.status !== 'pending') return res.status(400).json({ error: 'Transaction is not pending' });
 
   tx.status      = action === 'approve' ? 'approved' : 'rejected';
@@ -120,7 +113,7 @@ router.post('/verify-transaction', async (req, res) => {
 
 // ── POST /api/admin/process-withdrawal ────────────────────────────────────────
 router.post('/process-withdrawal', async (req, res) => {
-  const { withdrawalId, action } = req.body;
+  const { withdrawalId, action } = req.body || {};
   if (!withdrawalId || !action) {
     return res.status(400).json({ error: 'withdrawalId and action are required' });
   }
@@ -129,7 +122,7 @@ router.post('/process-withdrawal', async (req, res) => {
   }
 
   const w = await store.findWithdrawal(withdrawalId);
-  if (!w)                     return res.status(404).json({ error: 'Withdrawal not found' });
+  if (!w) return res.status(404).json({ error: 'Withdrawal not found' });
   if (w.status !== 'pending') return res.status(400).json({ error: 'Withdrawal is not pending' });
 
   w.status      = action === 'approve' ? 'approved' : 'rejected';
@@ -150,19 +143,19 @@ router.post('/process-withdrawal', async (req, res) => {
   return res.json({ success: true, withdrawal: w });
 });
 
-// ── GET /api/admin/withdrawals ─────────────────────────────────────────────────
+// ── GET /api/admin/withdrawals ────────────────────────────────────────────────
 router.get('/withdrawals', async (_req, res) => {
   const withdrawals = await store.getWithdrawals();
   res.json({ withdrawals });
 });
 
-// ── GET /api/admin/transactions ────────────────────────────────────────────────
+// ── GET /api/admin/transactions ───────────────────────────────────────────────
 router.get('/transactions', async (_req, res) => {
   const transactions = await store.getTransactions();
   res.json({ transactions });
 });
 
-// ── GET /api/admin/users ───────────────────────────────────────────────────────
+// ── GET /api/admin/users ──────────────────────────────────────────────────────
 router.get('/users', async (_req, res) => {
   const users = await store.getUsers();
   res.json({
@@ -172,9 +165,9 @@ router.get('/users', async (_req, res) => {
 
 // ── POST /api/admin/sync — bulk-import data (for demo / migration) ─────────────
 router.post('/sync', async (req, res) => {
-  const { users, withdrawals, transactions } = req.body;
-  if (users)        await Promise.all(users.map(u        => store.saveUser(u)));
-  if (withdrawals)  await Promise.all(withdrawals.map(w  => store.saveWithdrawal(w)));
+  const { users, withdrawals, transactions } = req.body || {};
+  if (users)        await Promise.all(users.map(u => store.saveUser(u)));
+  if (withdrawals)  await Promise.all(withdrawals.map(w => store.saveWithdrawal(w)));
   if (transactions) await Promise.all(transactions.map(t => store.saveTransaction(t)));
 
   const [allUsers, allWithdrawals, allTransactions] = await Promise.all([
@@ -182,6 +175,7 @@ router.post('/sync', async (req, res) => {
     store.getWithdrawals(),
     store.getTransactions(),
   ]);
+
   res.json({
     success: true,
     synced: {
