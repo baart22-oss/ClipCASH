@@ -6,10 +6,6 @@
 
 // ─────────────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  // Require a logged-in user (any user) before showing the admin page.
-  // Actual admin privilege is verified by the backend session token below.
-  if (!requireAuth()) return;
-
   initAdminPage();
 });
 
