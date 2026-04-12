@@ -8,7 +8,6 @@
 </head>
 <body>
 
-<!-- NAVBAR -->
 <nav class="navbar">
   <div class="container">
     <a href="index.html" class="navbar-brand"><span class="logo-icon">🎬</span>Clip<span>Cash</span></a>
@@ -18,7 +17,6 @@
 </nav>
 <div class="navbar-mobile" id="mobile-nav"></div>
 
-<!-- ── ADMIN LOGIN MODAL ──────────────────────────────────────────────────── -->
 <div id="admin-login-modal" class="modal-backdrop hidden">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
@@ -26,7 +24,6 @@
     </div>
     <p style="font-size:.9rem;color:var(--text-secondary);margin-bottom:1.25rem">
       Enter your admin username and password to access the panel.
-      This is verified securely by the backend — not stored in your browser.
     </p>
     <form id="admin-login-form">
       <div class="form-group">
@@ -35,9 +32,7 @@
       </div>
       <div class="form-group">
         <label class="form-label" for="admin-password">Admin Password</label>
-        <div style="position:relative">
-          <input type="password" id="admin-password" class="form-input" placeholder="Enter admin password" autocomplete="current-password" required>
-        </div>
+        <input type="password" id="admin-password" class="form-input" placeholder="Enter admin password" autocomplete="current-password" required>
         <div class="form-error" id="admin-login-error"></div>
       </div>
       <button type="submit" id="admin-login-btn" class="btn btn-primary w-full mt-3">
@@ -47,155 +42,148 @@
   </div>
 </div>
 
-<!-- ── ADMIN CONTENT ─────────────────────────────────────────────────────── -->
 <div id="admin-content" class="hidden">
-
-<!-- PAGE HEADER -->
-<div class="page-header">
-  <div class="container">
-    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem">
-      <div>
-        <h1>🔧 Admin Panel</h1>
-        <p>Manage withdrawals, verify transactions, and monitor users.</p>
+  <div class="page-header">
+    <div class="container">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+        <div>
+          <h1>🔧 Admin Panel</h1>
+          <p>Manage withdrawals, verify deposit proofs, and monitor users.</p>
+        </div>
       </div>
     </div>
   </div>
+
+  <main class="admin-page" style="padding:1.5rem 0 4rem">
+    <div class="container">
+
+      <div class="admin-stat-grid">
+        <div class="stat-card">
+          <span class="stat-icon">⏳</span>
+          <div class="stat-label">Pending Withdrawals</div>
+          <div class="stat-value accent" id="stat-pending-w">0</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">💳</span>
+          <div class="stat-label">Pending Transactions</div>
+          <div class="stat-value gold" id="stat-pending-t">0</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">👥</span>
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value" id="stat-total-users">0</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">🏆</span>
+          <div class="stat-label">Active Subscribers</div>
+          <div class="stat-value green" id="stat-active-subs">0</div>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">💰</span>
+          <div class="stat-label">Total Withdrawal Volume</div>
+          <div class="stat-value gold" id="stat-total-w-vol">R0.00</div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="withdrawals">⏳ Withdrawals</button>
+        <button class="tab-btn" data-tab="transactions">💳 Deposits / Proofs</button>
+        <button class="tab-btn" data-tab="users">👥 Users</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-withdrawals">
+        <div class="section-actions">
+          <h2>Pending &amp; All Withdrawals</h2>
+          <button class="btn btn-secondary btn-sm" onclick="renderWithdrawals()">🔄 Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Amount</th>
+                  <th>Fee</th>
+                  <th>Net</th>
+                  <th>Method</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="withdrawals-tbody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-transactions">
+        <div class="section-actions">
+          <h2>Deposit Proofs &amp; Transactions</h2>
+          <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+            <input type="text" id="tx-email-filter" class="form-input" placeholder="🔍 Filter by email or username…" style="width:240px" oninput="filterTransactions()" aria-label="Filter transactions by email or username">
+            <button class="btn btn-secondary btn-sm" onclick="renderTransactions()">🔄 Refresh</button>
+          </div>
+        </div>
+        <div class="alert alert-info" style="margin-bottom:1rem">
+          <span class="alert-icon">ℹ️</span>
+          <div>Verify EFT proofs after confirming the bank transfer. Click <strong>View Proof</strong> to inspect the uploaded payment evidence, then click <strong>Verify</strong> to activate the subscription.</div>
+        </div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Plan</th>
+                  <th>Amount</th>
+                  <th>Method</th>
+                  <th>Proof</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="transactions-tbody">
+                <tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-users">
+        <div class="section-actions">
+          <h2>All Users</h2>
+          <button class="btn btn-secondary btn-sm" onclick="renderUsers()">🔄 Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Wallet</th>
+                  <th>Total Earned</th>
+                  <th>Referral Earn</th>
+                  <th>Plan</th>
+                  <th>Status</th>
+                  <th>Joined</th>
+                </tr>
+              </thead>
+              <tbody id="users-tbody">
+                <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
 </div>
-
-<main class="admin-page" style="padding:1.5rem 0 4rem">
-  <div class="container">
-
-    <!-- Admin Stats -->
-    <div class="admin-stat-grid">
-      <div class="stat-card">
-        <span class="stat-icon">⏳</span>
-        <div class="stat-label">Pending Withdrawals</div>
-        <div class="stat-value accent" id="stat-pending-w">0</div>
-      </div>
-      <div class="stat-card">
-        <span class="stat-icon">💳</span>
-        <div class="stat-label">Pending Transactions</div>
-        <div class="stat-value gold" id="stat-pending-t">0</div>
-      </div>
-      <div class="stat-card">
-        <span class="stat-icon">👥</span>
-        <div class="stat-label">Total Users</div>
-        <div class="stat-value" id="stat-total-users">0</div>
-      </div>
-      <div class="stat-card">
-        <span class="stat-icon">🏆</span>
-        <div class="stat-label">Active Subscribers</div>
-        <div class="stat-value green" id="stat-active-subs">0</div>
-      </div>
-      <div class="stat-card">
-        <span class="stat-icon">💰</span>
-        <div class="stat-label">Total Withdrawal Volume</div>
-        <div class="stat-value gold" id="stat-total-w-vol">R0.00</div>
-      </div>
-    </div>
-
-    <!-- Tab Navigation -->
-    <div class="tabs">
-      <button class="tab-btn active" data-tab="withdrawals">⏳ Withdrawals</button>
-      <button class="tab-btn" data-tab="transactions">💳 Transactions</button>
-      <button class="tab-btn" data-tab="users">👥 Users</button>
-    </div>
-
-    <!-- TAB: Withdrawals -->
-    <div class="tab-panel active" id="tab-withdrawals">
-      <div class="section-actions">
-        <h2>Pending &amp; All Withdrawals</h2>
-        <button class="btn btn-secondary btn-sm" onclick="renderWithdrawals()">🔄 Refresh</button>
-      </div>
-      <div class="table-wrap">
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Amount</th>
-                <th>Fee</th>
-                <th>Net</th>
-                <th>Method</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="withdrawals-tbody">
-              <tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-    <!-- TAB: Transactions -->
-    <div class="tab-panel" id="tab-transactions">
-      <div class="section-actions">
-        <h2>Deposit Transactions</h2>
-        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
-          <input type="text" id="tx-email-filter" class="form-input" placeholder="🔍 Filter by email or username…" style="width:240px" oninput="filterTransactions()" aria-label="Filter transactions by email or username">
-          <button class="btn btn-secondary btn-sm" onclick="renderTransactions()">🔄 Refresh</button>
-        </div>
-      </div>
-      <div class="alert alert-info" style="margin-bottom:1rem">
-        <span class="alert-icon">ℹ️</span>
-        <div>Verify Yoco payments after confirming receipt in your Yoco dashboard. Match the payment to the user email shown below, then click <strong>Verify</strong> to activate their subscription.</div>
-      </div>
-      <div class="table-wrap">
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Plan</th>
-                <th>Amount</th>
-                <th>Method</th>
-                <th>Date</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="transactions-tbody">
-              <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: Users -->
-    <div class="tab-panel" id="tab-users">
-      <div class="section-actions">
-        <h2>All Users</h2>
-        <button class="btn btn-secondary btn-sm" onclick="renderUsers()">🔄 Refresh</button>
-      </div>
-      <div class="table-wrap">
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Wallet</th>
-                <th>Total Earned</th>
-                <th>Referral Earn</th>
-                <th>Plan</th>
-                <th>Status</th>
-                <th>Joined</th>
-              </tr>
-            </thead>
-            <tbody id="users-tbody">
-              <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</main>
-
-</div><!-- /#admin-content -->
 
 <div id="toast-container"></div>
 <script src="js/app.js"></script>
