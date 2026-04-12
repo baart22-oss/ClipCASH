@@ -8,7 +8,6 @@
 </head>
 <body>
 
-<!-- NAVBAR -->
 <nav class="navbar">
   <div class="container">
     <a href="index.html" class="navbar-brand"><span class="logo-icon">🎬</span>Clip<span>Cash</span></a>
@@ -18,11 +17,10 @@
 </nav>
 <div class="navbar-mobile" id="mobile-nav"></div>
 
-<!-- PAGE HEADER -->
 <div class="page-header">
   <div class="container">
     <h1>💳 Choose Your Plan</h1>
-    <p>Select a subscription tier to start earning daily ROI. One-time payment, 30 days of returns.</p>
+    <p>Select a subscription tier to start earning daily ROI. One-time payment, 40 days of returns.</p>
     <div class="page-header-meta">
       <span class="badge badge-active">💰 Wallet: <strong id="wallet-balance-display">R0.00</strong></span>
     </div>
@@ -32,7 +30,6 @@
 <main style="padding:2rem 0 4rem">
   <div class="container">
 
-    <!-- Current Subscription -->
     <div class="card mb-3" style="margin-bottom:1.5rem">
       <div class="card-header">
         <div class="card-title">📋 Current Subscription</div>
@@ -41,17 +38,14 @@
       <div id="current-sub-info"><div class="spinner"></div></div>
     </div>
 
-    <!-- Info Alert -->
     <div class="alert alert-info" style="margin-bottom:1.5rem">
       <span class="alert-icon">ℹ️</span>
       <div>
         <strong>How earnings work:</strong> Each plan earns 5% daily ROI on your subscription amount,
-        up to a maximum of 2× (200% return). Once you hit the cap, deposit again to start a new cycle.
-        Referral bonuses are credited instantly when your referrals subscribe.
+        up to a maximum of 2× (200% return). Plans run for 40 days to allow the full cycle.
       </div>
     </div>
 
-    <!-- Plan Cards -->
     <h2 style="font-size:1.25rem;font-weight:700;margin-bottom:1.25rem">All Plans</h2>
     <div class="plans-grid" id="plans-grid">
       <div class="spinner"></div>
@@ -60,7 +54,6 @@
   </div>
 </main>
 
-<!-- PAYMENT MODAL -->
 <div class="modal-backdrop hidden" id="modal-backdrop">
   <div class="modal">
     <div class="modal-header">
@@ -76,29 +69,32 @@
       <div>Payments are non-refundable once a subscription is activated. Please review your plan selection carefully.</div>
     </div>
 
-    <p style="font-size:.9rem;color:var(--text-secondary);margin-bottom:1.25rem">
-      Choose your preferred payment method:
-    </p>
+    <div style="padding:.75rem 1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);margin-bottom:1rem">
+      <h3 style="margin-bottom:.5rem">Bank Transfer (EFT)</h3>
+      <p><strong>Name:</strong> ClipCash</p>
+      <p><strong>Bank:</strong> Tymebank</p>
+      <p><strong>Account number:</strong> 5113 1403 573</p>
+      <p><strong>Branch Code:</strong> 678910</p>
+    </div>
+
+    <div style="padding:.75rem 1rem;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);margin-bottom:1rem">
+      <label class="form-label" for="proof-file">Upload Proof of Payment</label>
+      <input type="file" id="proof-file" class="form-control" accept="image/*,application/pdf" required>
+      <div class="form-hint">Proof of payment is mandatory for EFT submissions.</div>
+    </div>
 
     <div style="display:flex;flex-direction:column;gap:.75rem">
       <button class="btn btn-gold btn-lg" id="pay-wallet-btn" type="button">
         👛 Pay with Wallet
       </button>
-      <button class="btn btn-primary btn-lg" id="pay-yoco-btn" type="button">
-        💳 Pay with Yoco (Card / EFT)
+      <button class="btn btn-primary btn-lg" id="submit-proof-btn" type="button">
+        📤 Submit EFT Proof for Approval
       </button>
-    </div>
-
-    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;margin-top:.75rem;font-size:.82rem;color:var(--text-secondary)">
-      📧 <strong>Important:</strong> When paying via Yoco, please use your email
-      <strong><span id="yoco-ref-email"></span></strong>
-      as the payment <em>reference / note</em> so our admin team can link the payment to your account.
     </div>
 
     <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">
       <p style="font-size:.78rem;color:var(--text-muted);text-align:center">
-        Yoco payments are verified by our admin team within 1–4 hours.
-        Wallet payments are instant.
+        EFT submissions are reviewed by our admin team. Wallet payments are instant.
       </p>
     </div>
   </div>
