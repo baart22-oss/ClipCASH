@@ -11,19 +11,15 @@ const { Pool } = require('pg');
 // ── Subscription Tiers (mirrors js/app.js SUBSCRIPTION_TIERS) ─────────────────
 const SUBSCRIPTION_TIERS = {
   free_intern: { price: 0,     dailyROI: 0,    durationDays: 3,  maxEarnings: 0     },
-  starter:     { price: 100,   dailyROI: 0.05, durationDays: 30, maxEarnings: 200   },
-  bronze:      { price: 500,   dailyROI: 0.05, durationDays: 30, maxEarnings: 1000  },
-  silver:      { price: 1000,  dailyROI: 0.05, durationDays: 30, maxEarnings: 2000  },
-  gold:        { price: 5000,  dailyROI: 0.05, durationDays: 30, maxEarnings: 10000 },
-  platinum:    { price: 10000, dailyROI: 0.05, durationDays: 30, maxEarnings: 20000 },
-  diamond:     { price: 20000, dailyROI: 0.05, durationDays: 30, maxEarnings: 40000 },
+  starter:     { price: 100,   dailyROI: 0.05, durationDays: 40, maxEarnings: 200   },
+  bronze:      { price: 500,   dailyROI: 0.05, durationDays: 40, maxEarnings: 1000  },
+  silver:      { price: 1000,  dailyROI: 0.05, durationDays: 40, maxEarnings: 2000  },
+  gold:        { price: 5000,  dailyROI: 0.05, durationDays: 40, maxEarnings: 10000 },
+  platinum:    { price: 10000, dailyROI: 0.05, durationDays: 40, maxEarnings: 20000 },
+  diamond:     { price: 20000, dailyROI: 0.05, durationDays: 40, maxEarnings: 40000 },
 };
 
 // ── PostgreSQL pool ───────────────────────────────────────────────────────────
-// Render sets RENDER=true for all web services. When running on Render, the
-// internal database uses a self-signed TLS certificate so we must disable
-// certificate verification. For all other environments (local dev, etc.) we
-// use the default SSL behaviour.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL && process.env.RENDER
@@ -36,7 +32,7 @@ function generateId() {
   return 'cc_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
 }
 
-// ── Row mappers (snake_case DB columns → camelCase JS objects) ────────────────
+// ── Row mappers ────────────────────────────────────────────────────────────────
 function rowToUser(r) {
   if (!r) return null;
   return {
@@ -77,6 +73,9 @@ function rowToTransaction(r) {
     createdAt:   Number(r.created_at),
     processedAt: r.processed_at,
     processedBy: r.processed_by,
+    proofData:   r.proof_data,
+    proofName:   r.proof_name,
+    proofType:   r.proof_type,
   };
 }
 
@@ -99,7 +98,7 @@ function rowToWithdrawal(r) {
   };
 }
 
-// ── Database migration — creates tables if they do not exist ──────────────────
+// ── Database migration ─────────────────────────────────────────────────────────
 async function migrate() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -138,7 +137,10 @@ async function migrate() {
       note         TEXT,
       created_at   BIGINT NOT NULL,
       processed_at TEXT,
-      processed_by TEXT
+      processed_by TEXT,
+      proof_data   TEXT,
+      proof_name   TEXT,
+      proof_type   TEXT
     )
   `);
 
@@ -160,10 +162,12 @@ async function migrate() {
     )
   `);
 
-  // Backfill columns for existing databases
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_earnings NUMERIC(14,4) NOT NULL DEFAULT 0`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_earnings_date TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS daily_clips_watched INT NOT NULL DEFAULT 0`);
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_data TEXT`);
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_name TEXT`);
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_type TEXT`);
 
   console.log('[DB] Tables migrated successfully');
 }
@@ -264,12 +268,16 @@ async function saveTransaction(tx) {
   await pool.query(`
     INSERT INTO transactions
       (id, user_id, username, email, type, tier, tier_name, amount,
-       status, method, note, created_at, processed_at, processed_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       status, method, note, created_at, processed_at, processed_by,
+       proof_data, proof_name, proof_type)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
     ON CONFLICT (id) DO UPDATE SET
       status       = EXCLUDED.status,
       processed_at = EXCLUDED.processed_at,
-      processed_by = EXCLUDED.processed_by
+      processed_by = EXCLUDED.processed_by,
+      proof_data   = EXCLUDED.proof_data,
+      proof_name   = EXCLUDED.proof_name,
+      proof_type   = EXCLUDED.proof_type
   `, [
     tx.id,
     tx.userId,
@@ -285,6 +293,9 @@ async function saveTransaction(tx) {
     tx.createdAt,
     tx.processedAt || null,
     tx.processedBy || null,
+    tx.proofData || null,
+    tx.proofName || null,
+    tx.proofType || null,
   ]);
   return tx;
 }
@@ -336,7 +347,7 @@ async function saveWithdrawal(w) {
   return w;
 }
 
-// ── Admin stats (single round-trip) ──────────────────────────────────────────
+// ── Admin stats ───────────────────────────────────────────────────────────────
 async function getStats() {
   const now = Date.now();
   const [
