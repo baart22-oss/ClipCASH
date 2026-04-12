@@ -22,7 +22,7 @@ const JWT_ADMIN_TTL  = '4h';
 
 let cachedAdminHash = null;
 
-// ── POST /api/admin/login ──────────────────────────────────────────────────────
+// ── POST /api/admin/login ─────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   const { username, password } = req.body || {};
 
@@ -52,7 +52,7 @@ router.post('/login', async (req, res) => {
   return res.json({ token, expiresAt });
 });
 
-// ── Auth Middleware ────────────────────────────────────────────────────────────
+// ── Auth Middleware ───────────────────────────────────────────────────────────
 function requireAdminJWT(req, res, next) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) {
@@ -109,7 +109,6 @@ router.post('/verify-transaction', async (req, res) => {
         expiresAt: tier ? now + tier.durationDays * 86400000 : null,
       };
 
-      // Compatibility fields for older code paths
       user.subscriptionActive = true;
       user.subscriptionTier   = tx.tier;
       user.subscriptionStart  = new Date(now).toISOString();
@@ -174,7 +173,7 @@ router.get('/users', async (_req, res) => {
   });
 });
 
-// ── POST /api/admin/sync — bulk-import data (for demo / migration) ─────────────
+// ── POST /api/admin/sync — bulk-import data (for demo / migration) ────────────
 router.post('/sync', async (req, res) => {
   const { users, withdrawals, transactions } = req.body || {};
   if (users)        await Promise.all(users.map(u => store.saveUser(u)));
