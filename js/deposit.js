@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   currentUser = requireAuth();
   if (!currentUser) return;
 
-  // Refresh user data from backend
   try {
     const data = await apiRequest('/api/user/me');
     currentUser = data.user;
@@ -23,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderWalletBalance();
 
   document.getElementById('pay-wallet-btn')?.addEventListener('click', payWithWallet);
-  document.getElementById('pay-yoco-btn')  ?.addEventListener('click', payWithYoco);
+  document.getElementById('submit-proof-btn')?.addEventListener('click', submitProof);
   document.getElementById('modal-close')    ?.addEventListener('click', closeModal);
   document.getElementById('modal-backdrop')?.addEventListener('click', e => {
     if (e.target === e.currentTarget) closeModal();
@@ -124,7 +123,6 @@ function renderWalletBalance() {
   setEl('wallet-balance-display', formatZAR(currentUser.wallet || 0));
 }
 
-// ── Plan Selection ────────────────────────────────────────────────────────────
 function selectPlan(key) {
   selectedTierKey = key;
 
@@ -158,19 +156,7 @@ function selectAndPay(key) {
   if (mPrice) mPrice.textContent = formatZAR(tier.price);
   if (mIcon)  mIcon.textContent  = TIER_ICONS[key] || '🎬';
 
-  const refEmailEl = document.getElementById('yoco-ref-email');
-  if (refEmailEl) refEmailEl.textContent = currentUser.email || '';
-
   renderWalletBalance();
-  const walletBal = currentUser.wallet || 0;
-  const walletBtn = document.getElementById('pay-wallet-btn');
-  if (walletBtn) {
-    walletBtn.disabled    = walletBal < tier.price;
-    walletBtn.title       = walletBal < tier.price ? 'Insufficient wallet balance' : '';
-    walletBtn.textContent = walletBal < tier.price
-      ? `Wallet Balance Insufficient (${formatZAR(walletBal)})`
-      : `Pay with Wallet (${formatZAR(walletBal)})`;
-  }
 }
 
 function closeModal() {
@@ -178,7 +164,6 @@ function closeModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-// ── Payment Methods ───────────────────────────────────────────────────────────
 async function activateFreeIntern() {
   try {
     const data  = await apiRequest('/api/user/subscription', {
@@ -188,7 +173,7 @@ async function activateFreeIntern() {
     currentUser = data.user;
     saveCurrentUser(currentUser);
     renderCurrentSub();
-    showToast('Free Intern plan activated! Watch trailers to explore. 🎬', 'success');
+    showToast('Free Intern plan activated! 🎬', 'success');
   } catch (err) {
     showToast('Activation failed: ' + err.message, 'error');
   }
@@ -215,7 +200,7 @@ async function payWithWallet() {
     saveCurrentUser(currentUser);
 
     closeModal();
-    showToast(`✅ ${tier.name} plan activated! Earning starts now.`, 'success');
+    showToast(`✅ ${tier.name} plan activated!`, 'success');
     renderCurrentSub();
     renderWalletBalance();
     renderPlanCards();
@@ -225,49 +210,58 @@ async function payWithWallet() {
   }
 }
 
-async function payWithYoco() {
+async function submitProof() {
   if (!selectedTierKey) return;
-  const tier = SUBSCRIPTION_TIERS[selectedTierKey];
-  const yocoUrl = YOCO_PAYMENT_LINKS?.[selectedTierKey];
 
-  if (!yocoUrl) {
-    showToast('Payment link not configured for this plan.', 'error');
+  const tier = SUBSCRIPTION_TIERS[selectedTierKey];
+  const fileInput = document.getElementById('proof-file');
+  const file = fileInput?.files?.[0];
+
+  if (!file) {
+    showToast('Please upload proof of payment.', 'error');
     return;
   }
 
-  const btn = document.getElementById('pay-yoco-btn');
+  const btn = document.getElementById('submit-proof-btn');
   if (btn) btn.disabled = true;
 
-  // Optional: store a pending record for manual admin review
   try {
-    await apiRequest('/api/deposit/initiate', {
+    const proofData = await fileToDataUrl(file);
+
+    const data = await apiRequest('/api/deposit/initiate', {
       method: 'POST',
       body: {
         tier: selectedTierKey,
         tierName: tier.name,
         amount: tier.price,
-        method: 'yoco',
-        email: currentUser.email || '',
+        method: 'eft',
+        proofData,
+        proofName: file.name,
+        proofType: file.type || 'application/octet-stream',
       },
     });
-  } catch (_err) {
-    // continue even if backend record fails
+
+    showToast('Proof submitted successfully. Awaiting admin approval.', 'success');
+    closeModal();
+    fileInput.value = '';
+    console.log('Deposit submitted:', data.transactionId);
+  } catch (err) {
+    showToast('Proof submission failed: ' + err.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
   }
-
-  closeModal();
-
-  showToast(
-    `Opening Yoco payment for ${tier.name}. Please use ${currentUser.email || 'your email'} as the payment reference for admin verification.`,
-    'info',
-    8000
-  );
-
-  window.location.href = yocoUrl;
-
-  if (btn) btn.disabled = false;
 }
 
-// ── DOM Helper ────────────────────────────────────────────────────────────────
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Could not read proof file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── DOM Helper ───────────────────────────────────────────────────────────────
 function setEl(id, val) {
   const el = document.getElementById(id);
   if (el) el.textContent = val;
