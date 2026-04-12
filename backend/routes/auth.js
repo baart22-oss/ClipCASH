@@ -2,12 +2,6 @@
 
 /**
  * User Auth Routes
- *
- * POST /api/auth/register  — create account, returns { token, user }
- * POST /api/auth/login     — verify credentials, returns { token, user }
- *
- * Also exports requireUserJWT middleware for use by /api/user/* and
- * /api/withdrawal/* routes.
  */
 
 const express = require('express');
@@ -21,7 +15,6 @@ const JWT_SECRET    = process.env.JWT_SECRET || 'clipcash-dev-jwt-secret-change-
 const JWT_USER_TTL  = '7d';
 const BCRYPT_ROUNDS = 10;
 
-// ── Token helpers ─────────────────────────────────────────────────────────────
 function signUserToken(user) {
   return jwt.sign(
     { sub: user.id, email: user.email, username: user.username, role: 'user' },
@@ -30,7 +23,6 @@ function signUserToken(user) {
   );
 }
 
-// ── Middleware — exported for use by other route files ────────────────────────
 function requireUserJWT(req, res, next) {
   const auth = req.headers.authorization || '';
   if (!auth.startsWith('Bearer ')) {
@@ -61,9 +53,6 @@ router.post('/register', async (req, res) => {
   if (password.length < 6) {
     return res.status(400).json({ error: 'Password must be at least 6 characters' });
   }
-  if (!/^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/.test(email)) {
-    return res.status(400).json({ error: 'Invalid email address' });
-  }
 
   const emailLower = email.toLowerCase();
 
@@ -74,7 +63,6 @@ router.post('/register', async (req, res) => {
     return res.status(409).json({ error: 'Username is already taken' });
   }
 
-  // Validate referral code
   let referredBy = null;
   if (referralCode) {
     const referrer = await store.findUserByReferralCode(referralCode.toUpperCase());
@@ -117,7 +105,6 @@ router.post('/register', async (req, res) => {
   const token = signUserToken(newUser);
   const { passwordHash: _ph, ...safeUser } = newUser;
 
-  console.log(`[Auth] User registered: ${newUser.username} (${newUser.email})`);
   return res.status(201).json({ token, user: safeUser });
 });
 
@@ -131,7 +118,6 @@ router.post('/login', async (req, res) => {
 
   const user = await store.findUserByEmail(email.toLowerCase());
 
-  // Always run bcrypt.compare to prevent timing-based user-enumeration attacks.
   const dummyHash = '$2a$10$invalidhashpadding000000000000000000000000000000000000';
   const valid = user
     ? await bcrypt.compare(password, user.passwordHash)
@@ -145,8 +131,6 @@ router.post('/login', async (req, res) => {
 
   const token = signUserToken(user);
   const { passwordHash: _ph, ...safeUser } = user;
-
-  console.log(`[Auth] User logged in: ${user.username}`);
   return res.json({ token, user: safeUser });
 });
 
@@ -162,7 +146,6 @@ async function processPendingEarnings(user) {
   const today = new Date(now).toISOString().slice(0, 10);
   const dailyCap = parseFloat((tier.price * tier.dailyROI).toFixed(4));
 
-  // Reset daily counters if new day
   if (user.dailyEarningsDate !== today) {
     user.dailyEarningsDate = today;
     user.dailyEarnings = 0;
@@ -173,7 +156,7 @@ async function processPendingEarnings(user) {
   const daysSince = Math.floor((now - lastTs) / 86400000);
   if (daysSince < 1) return;
 
-  const cap      = tier.maxEarnings;
+  const cap = tier.maxEarnings;
 
   for (let i = 0; i < daysSince; i++) {
     if ((user.totalEarned || 0) >= cap) break;
@@ -186,7 +169,7 @@ async function processPendingEarnings(user) {
     if (credit <= 0) break;
 
     user.totalEarned = parseFloat(((user.totalEarned || 0) + credit).toFixed(4));
-    user.wallet      = parseFloat(((user.wallet      || 0) + credit).toFixed(4));
+    user.wallet      = parseFloat(((user.wallet || 0) + credit).toFixed(4));
     user.dailyEarnings = parseFloat(((user.dailyEarnings || 0) + credit).toFixed(4));
 
     await store.saveTransaction({
@@ -206,7 +189,6 @@ async function processPendingEarnings(user) {
   await store.saveUser(user);
 }
 
-// ���─ Utility ───────────────────────────────────────────────────────────────────
 function generateReferralCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
