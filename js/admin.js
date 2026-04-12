@@ -238,7 +238,12 @@ function renderTransactionRows(deposits) {
       </td>
       <td data-label="Plan">${TIER_ICONS[t.tier] || '🎬'} ${t.tierName || t.note || '—'}</td>
       <td data-label="Amount">${formatZAR(t.amount)}</td>
-      <td data-label="Method">${t.method === 'yoco' ? '💳 Yoco' : '👕 Wallet'}</td>
+      <td data-label="Method">${t.method === 'eft' ? '🏦 EFT' : (t.method === 'wallet' ? '👕 Wallet' : '—')}</td>
+      <td data-label="Proof">
+        ${t.proofData ? `
+          <a href="${t.proofData}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">View Proof</a>
+        ` : '<span class="text-muted">—</span>'}
+      </td>
       <td data-label="Date">${formatDateTime(t.createdAt)}</td>
       <td data-label="Status"><span class="badge badge-${t.status}"><span class="badge-dot"></span>${t.status}</span></td>
       <td data-label="Actions">
