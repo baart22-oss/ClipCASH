@@ -59,23 +59,24 @@ function rowToUser(r) {
 function rowToTransaction(r) {
   if (!r) return null;
   return {
-    id:          r.id,
-    userId:      r.user_id,
-    username:    r.username,
-    email:       r.email,
-    type:        r.type,
-    tier:        r.tier,
-    tierName:    r.tier_name,
-    amount:      parseFloat(r.amount),
-    status:      r.status,
-    method:      r.method,
-    note:        r.note,
-    createdAt:   Number(r.created_at),
-    processedAt: r.processed_at,
-    processedBy: r.processed_by,
-    proofData:   r.proof_data,
-    proofName:   r.proof_name,
-    proofType:   r.proof_type,
+    id:                r.id,
+    userId:            r.user_id,
+    username:          r.username,
+    email:             r.email,
+    type:              r.type,
+    tier:              r.tier,
+    tierName:          r.tier_name,
+    amount:            parseFloat(r.amount),
+    status:            r.status,
+    method:            r.method,
+    note:              r.note,
+    createdAt:         Number(r.created_at),
+    processedAt:       r.processed_at,
+    processedBy:       r.processed_by,
+    proofData:         r.proof_data,
+    proofName:         r.proof_name,
+    proofType:         r.proof_type,
+    referralBonusPaid: r.referral_bonus_paid || false,
   };
 }
 
@@ -168,6 +169,7 @@ async function migrate() {
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_data TEXT`);
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_name TEXT`);
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_type TEXT`);
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS referral_bonus_paid BOOLEAN NOT NULL DEFAULT FALSE`);
 
   console.log('[DB] Tables migrated successfully');
 }
@@ -269,15 +271,16 @@ async function saveTransaction(tx) {
     INSERT INTO transactions
       (id, user_id, username, email, type, tier, tier_name, amount,
        status, method, note, created_at, processed_at, processed_by,
-       proof_data, proof_name, proof_type)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+       proof_data, proof_name, proof_type, referral_bonus_paid)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
     ON CONFLICT (id) DO UPDATE SET
-      status       = EXCLUDED.status,
-      processed_at = EXCLUDED.processed_at,
-      processed_by = EXCLUDED.processed_by,
-      proof_data   = EXCLUDED.proof_data,
-      proof_name   = EXCLUDED.proof_name,
-      proof_type   = EXCLUDED.proof_type
+      status             = EXCLUDED.status,
+      processed_at       = EXCLUDED.processed_at,
+      processed_by       = EXCLUDED.processed_by,
+      proof_data         = EXCLUDED.proof_data,
+      proof_name         = EXCLUDED.proof_name,
+      proof_type         = EXCLUDED.proof_type,
+      referral_bonus_paid = EXCLUDED.referral_bonus_paid
   `, [
     tx.id,
     tx.userId,
@@ -296,6 +299,7 @@ async function saveTransaction(tx) {
     tx.proofData || null,
     tx.proofName || null,
     tx.proofType || null,
+    tx.referralBonusPaid || false,
   ]);
   return tx;
 }
@@ -345,6 +349,44 @@ async function saveWithdrawal(w) {
     w.processedBy || null,
   ]);
   return w;
+}
+
+// ── Referral bonus helpers ────────────────────────────────────────────────────
+const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
+
+async function _creditBonus(user, bonus, now, note) {
+  user.wallet           = parseFloat(((user.wallet           || 0) + bonus).toFixed(4));
+  user.referralEarnings = parseFloat(((user.referralEarnings || 0) + bonus).toFixed(4));
+  await saveUser(user);
+  await saveTransaction({
+    id:        generateId(),
+    userId:    user.id,
+    username:  user.username,
+    email:     user.email,
+    type:      'referral_bonus',
+    amount:    parseFloat(bonus.toFixed(4)),
+    status:    'approved',
+    note,
+    createdAt: now,
+  });
+}
+
+async function creditReferralBonuses(newUser, amount, now) {
+  if (!newUser.referredBy) return;
+
+  const l1 = await findUserByReferralCode(newUser.referredBy);
+  if (!l1) return;
+  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
+
+  if (!l1.referredBy) return;
+  const l2 = await findUserByReferralCode(l1.referredBy);
+  if (!l2) return;
+  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
+
+  if (!l2.referredBy) return;
+  const l3 = await findUserByReferralCode(l2.referredBy);
+  if (!l3) return;
+  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
 }
 
 // ── Admin stats ───────────────────────────────────────────────────────────────
@@ -397,4 +439,4 @@ const store = {
   getStats,
 };
 
-module.exports = { store, SUBSCRIPTION_TIERS, generateId, migrate, pool };
+module.exports = { store, SUBSCRIPTION_TIERS, generateId, migrate, pool, creditReferralBonuses };
