@@ -14,7 +14,7 @@ const express = require('express');
 const router  = express.Router();
 
 const { requireUserJWT } = require('./auth');
-const { store, SUBSCRIPTION_TIERS, generateId } = require('./store');
+const { store, SUBSCRIPTION_TIERS, generateId, creditReferralBonuses } = require('./store');
 
 // All routes below require a valid user JWT
 router.use(requireUserJWT);
@@ -211,43 +211,5 @@ router.post('/earnings', async (req, res) => {
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser, credited });
 });
-
-// ── Internal: credit multi-level referral bonuses ─────────────────────────────
-const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
-
-async function creditReferralBonuses(newUser, amount, now) {
-  if (!newUser.referredBy) return;
-
-  const l1 = await store.findUserByReferralCode(newUser.referredBy);
-  if (!l1) return;
-  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
-
-  if (!l1.referredBy) return;
-  const l2 = await store.findUserByReferralCode(l1.referredBy);
-  if (!l2) return;
-  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
-
-  if (!l2.referredBy) return;
-  const l3 = await store.findUserByReferralCode(l2.referredBy);
-  if (!l3) return;
-  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
-}
-
-async function _creditBonus(user, bonus, now, note) {
-  user.wallet          = parseFloat(((user.wallet          || 0) + bonus).toFixed(4));
-  user.referralEarnings = parseFloat(((user.referralEarnings || 0) + bonus).toFixed(4));
-  await store.saveUser(user);
-  await store.saveTransaction({
-    id:        generateId(),
-    userId:    user.id,
-    username:  user.username,
-    email:     user.email,
-    type:      'referral_bonus',
-    amount:    parseFloat(bonus.toFixed(4)),
-    status:    'approved',
-    note,
-    createdAt: now,
-  });
-}
 
 module.exports = router;

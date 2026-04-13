@@ -13,7 +13,7 @@ const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
 const router  = express.Router();
 
-const { store, SUBSCRIPTION_TIERS } = require('./store');
+const { store, SUBSCRIPTION_TIERS, creditReferralBonuses } = require('./store');
 
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
@@ -114,6 +114,16 @@ router.post('/verify-transaction', async (req, res) => {
       user.subscriptionStart  = new Date(now).toISOString();
 
       await store.saveUser(user);
+
+      // Credit multi-level referral bonuses once per approved deposit transaction
+      if (!tx.referralBonusPaid) {
+        const amount = tx.amount != null ? tx.amount : (tier ? tier.price : 0);
+        if (amount > 0) {
+          await creditReferralBonuses(user, amount, now);
+          tx.referralBonusPaid = true;
+          await store.saveTransaction(tx);
+        }
+      }
     }
   }
 
