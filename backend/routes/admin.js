@@ -117,7 +117,7 @@ router.post('/verify-transaction', async (req, res) => {
 
       // Credit multi-level referral bonuses once per approved deposit transaction
       if (!tx.referralBonusPaid) {
-        const amount = tx.amount || (tier ? tier.price : 0);
+        const amount = tx.amount != null ? tx.amount : (tier ? tier.price : 0);
         if (amount > 0) {
           await creditReferralBonuses(user, amount, now);
           tx.referralBonusPaid = true;
