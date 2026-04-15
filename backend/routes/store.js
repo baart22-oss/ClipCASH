@@ -77,6 +77,8 @@ function rowToTransaction(r) {
     proofName:         r.proof_name,
     proofType:         r.proof_type,
     referralBonusPaid: r.referral_bonus_paid || false,
+    sourceTxId:        r.source_tx_id || null,
+    referralLevel:     r.referral_level != null ? Number(r.referral_level) : null,
   };
 }
 
@@ -170,6 +172,13 @@ async function migrate() {
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_name TEXT`);
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS proof_type TEXT`);
   await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS referral_bonus_paid BOOLEAN NOT NULL DEFAULT FALSE`);
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS source_tx_id TEXT`);
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS referral_level INT`);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_referral_bonus_per_source
+    ON transactions (source_tx_id, referral_level)
+    WHERE type = 'referral_bonus' AND source_tx_id IS NOT NULL
+  `);
 
   console.log('[DB] Tables migrated successfully');
 }
@@ -271,8 +280,9 @@ async function saveTransaction(tx) {
     INSERT INTO transactions
       (id, user_id, username, email, type, tier, tier_name, amount,
        status, method, note, created_at, processed_at, processed_by,
-       proof_data, proof_name, proof_type, referral_bonus_paid)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       proof_data, proof_name, proof_type, referral_bonus_paid,
+       source_tx_id, referral_level)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
     ON CONFLICT (id) DO UPDATE SET
       status             = EXCLUDED.status,
       processed_at       = EXCLUDED.processed_at,
@@ -280,7 +290,9 @@ async function saveTransaction(tx) {
       proof_data         = EXCLUDED.proof_data,
       proof_name         = EXCLUDED.proof_name,
       proof_type         = EXCLUDED.proof_type,
-      referral_bonus_paid = EXCLUDED.referral_bonus_paid
+      referral_bonus_paid = EXCLUDED.referral_bonus_paid,
+      source_tx_id       = EXCLUDED.source_tx_id,
+      referral_level     = EXCLUDED.referral_level
   `, [
     tx.id,
     tx.userId,
@@ -300,6 +312,8 @@ async function saveTransaction(tx) {
     tx.proofName || null,
     tx.proofType || null,
     tx.referralBonusPaid || false,
+    tx.sourceTxId || null,
+    tx.referralLevel ?? null,
   ]);
   return tx;
 }
@@ -354,39 +368,52 @@ async function saveWithdrawal(w) {
 // ── Referral bonus helpers ────────────────────────────────────────────────────
 const REFERRAL_LEVELS = { 1: 0.10, 2: 0.05, 3: 0.02 };
 
-async function _creditBonus(user, bonus, now, note) {
+async function _creditBonus(user, bonus, now, note, sourceTxId, level) {
+  // Atomically insert the referral_bonus transaction.
+  // The partial unique index on (source_tx_id, referral_level) WHERE type='referral_bonus'
+  // ensures at-most-once payout per triggering transaction per level.
+  const result = await pool.query(`
+    INSERT INTO transactions
+      (id, user_id, username, email, type, amount, status, note,
+       created_at, source_tx_id, referral_level)
+    VALUES ($1,$2,$3,$4,'referral_bonus',$5,'approved',$6,$7,$8,$9)
+    ON CONFLICT DO NOTHING
+  `, [
+    generateId(),
+    user.id,
+    user.username,
+    user.email,
+    parseFloat(bonus.toFixed(4)),
+    note,
+    now,
+    sourceTxId || null,
+    level ?? null,
+  ]);
+
+  // rowCount === 0 means the unique index rejected the insert (duplicate) — skip wallet credit
+  if (result.rowCount === 0) return;
+
   user.wallet           = parseFloat(((user.wallet           || 0) + bonus).toFixed(4));
   user.referralEarnings = parseFloat(((user.referralEarnings || 0) + bonus).toFixed(4));
   await saveUser(user);
-  await saveTransaction({
-    id:        generateId(),
-    userId:    user.id,
-    username:  user.username,
-    email:     user.email,
-    type:      'referral_bonus',
-    amount:    parseFloat(bonus.toFixed(4)),
-    status:    'approved',
-    note,
-    createdAt: now,
-  });
 }
 
-async function creditReferralBonuses(newUser, amount, now) {
+async function creditReferralBonuses(newUser, amount, now, sourceTxId) {
   if (!newUser.referredBy) return;
 
   const l1 = await findUserByReferralCode(newUser.referredBy);
   if (!l1) return;
-  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username);
+  await _creditBonus(l1, amount * REFERRAL_LEVELS[1], now, 'Level 1 referral bonus from ' + newUser.username, sourceTxId, 1);
 
   if (!l1.referredBy) return;
   const l2 = await findUserByReferralCode(l1.referredBy);
   if (!l2) return;
-  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus');
+  await _creditBonus(l2, amount * REFERRAL_LEVELS[2], now, 'Level 2 referral bonus', sourceTxId, 2);
 
   if (!l2.referredBy) return;
   const l3 = await findUserByReferralCode(l2.referredBy);
   if (!l3) return;
-  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus');
+  await _creditBonus(l3, amount * REFERRAL_LEVELS[3], now, 'Level 3 referral bonus', sourceTxId, 3);
 }
 
 // ── Admin stats ───────────────────────────────────────────────────────────────
