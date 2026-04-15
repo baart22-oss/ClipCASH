@@ -119,7 +119,7 @@ router.post('/verify-transaction', async (req, res) => {
       if (!tx.referralBonusPaid) {
         const amount = tx.amount != null ? tx.amount : (tier ? tier.price : 0);
         if (amount > 0) {
-          await creditReferralBonuses(user, amount, now);
+          await creditReferralBonuses(user, amount, now, tx.id);
           tx.referralBonusPaid = true;
           await store.saveTransaction(tx);
         }

@@ -104,8 +104,9 @@ router.post('/subscription', async (req, res) => {
   await store.saveUser(user);
 
   // Log deposit transaction
+  const txId = generateId();
   await store.saveTransaction({
-    id:        generateId(),
+    id:        txId,
     userId:    user.id,
     username:  user.username,
     email:     user.email,
@@ -120,7 +121,7 @@ router.post('/subscription', async (req, res) => {
   });
 
   // Credit referral bonuses up 3 levels
-  await creditReferralBonuses(user, tier.price, now);
+  await creditReferralBonuses(user, tier.price, now, txId);
 
   const { passwordHash: _ph, ...safeUser } = user;
   return res.json({ user: safeUser });
