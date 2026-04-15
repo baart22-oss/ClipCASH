@@ -4,6 +4,15 @@
 
 'use strict';
 
+function escapeHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initAdminPage();
 });
@@ -112,14 +121,14 @@ function renderAdminStats() {
 async function renderWithdrawals() {
   const tbody = document.getElementById('withdrawals-tbody');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Loading…</td></tr>`;
 
   try {
     const data   = await apiRequest('/api/admin/withdrawals');
     const sorted = [...(data.withdrawals || [])].sort((a, b) => b.createdAt - a.createdAt);
 
     if (sorted.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:2rem">No withdrawal requests yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:2rem">No withdrawal requests yet.</td></tr>`;
       return;
     }
 
@@ -138,6 +147,7 @@ async function renderWithdrawals() {
         <td data-label="Fee" class="text-red">- ${formatZAR(w.fee)}</td>
         <td data-label="Net" class="text-green">${formatZAR(w.net)}</td>
         <td data-label="Method">${w.method || '—'}</td>
+        <td data-label="Account Details" class="account-details-cell">${w.account ? escapeHtml(w.account) : '—'}</td>
         <td data-label="Date">${formatDateTime(w.createdAt)}</td>
         <td data-label="Status"><span class="badge badge-${w.status}"><span class="badge-dot"></span>${w.status}</span></td>
         <td data-label="Actions">
@@ -151,7 +161,7 @@ async function renderWithdrawals() {
       </tr>
     `).join('');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted" style="padding:2rem">Error loading withdrawals: ${err.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="text-center text-muted" style="padding:2rem">Error loading withdrawals: ${err.message}</td></tr>`;
   }
 }
 
