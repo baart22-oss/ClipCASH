@@ -158,19 +158,24 @@ async function processPendingEarnings(user) {
 
   const cap = tier.maxEarnings;
 
+  // Credit each missed calendar day individually.
+  // dailyEarnings/dailyClipsWatched track *today* only, so they must not be
+  // used as a cap inside this loop — each past day is a separate day.
   for (let i = 0; i < daysSince; i++) {
     if ((user.totalEarned || 0) >= cap) break;
-    if ((user.dailyEarnings || 0) >= dailyCap) break;
 
     const remainingTotal = cap - (user.totalEarned || 0);
-    const remainingDaily  = dailyCap - (user.dailyEarnings || 0);
-    const credit = Math.min(tier.price * tier.dailyROI, remainingTotal, remainingDaily);
+    // dailyCap and remainingTotal are already rounded to 4 d.p.; no further rounding needed.
+    const credit = Math.min(dailyCap, remainingTotal);
 
     if (credit <= 0) break;
 
     user.totalEarned = parseFloat(((user.totalEarned || 0) + credit).toFixed(4));
     user.wallet      = parseFloat(((user.wallet || 0) + credit).toFixed(4));
-    user.dailyEarnings = parseFloat(((user.dailyEarnings || 0) + credit).toFixed(4));
+
+    // Timestamp each transaction to the day it belongs to for a clear audit trail.
+    const dayTs   = lastTs + (i + 1) * 86400000;
+    const dayDate = new Date(dayTs).toISOString().slice(0, 10);
 
     await store.saveTransaction({
       id:        generateId(),
@@ -178,10 +183,10 @@ async function processPendingEarnings(user) {
       username:  user.username,
       email:     user.email,
       type:      'daily_roi',
-      amount:    parseFloat(credit.toFixed(4)),
+      amount:    credit,
       status:    'approved',
-      note:      'Daily ROI credit',
-      createdAt: now,
+      note:      `Daily ROI credit (${dayDate})`,
+      createdAt: dayTs,
     });
   }
 
