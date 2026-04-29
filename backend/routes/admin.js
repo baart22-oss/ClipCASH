@@ -113,6 +113,15 @@ router.post('/verify-transaction', async (req, res) => {
       user.subscriptionTier   = tx.tier;
       user.subscriptionStart  = new Date(now).toISOString();
 
+      // Reset the ROI baseline so processPendingEarnings on next login starts
+      // from the correct activation point (mirrors the wallet-based path in user.js).
+      user.totalEarned           = 0;
+      user.lastEarningsProcessed = now;
+      user.dailyEarnings         = 0;
+      user.dailyEarningsDate     = new Date(now).toISOString().slice(0, 10);
+      user.dailyClipsWatched     = 0;
+      user.watchedTrailers       = [];
+
       await store.saveUser(user);
 
       // Credit multi-level referral bonuses once per approved deposit transaction
