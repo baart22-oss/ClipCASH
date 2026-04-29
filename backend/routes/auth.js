@@ -165,7 +165,8 @@ async function processPendingEarnings(user) {
     if ((user.totalEarned || 0) >= cap) break;
 
     const remainingTotal = cap - (user.totalEarned || 0);
-    const credit = parseFloat(Math.min(dailyCap, remainingTotal).toFixed(4));
+    // dailyCap and remainingTotal are already rounded to 4 d.p.; no further rounding needed.
+    const credit = Math.min(dailyCap, remainingTotal);
 
     if (credit <= 0) break;
 
